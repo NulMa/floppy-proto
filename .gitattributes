@@ -1,0 +1,62 @@
+# ============================================================
+#  이 파일은 첫 커밋에 반드시 포함한다.
+#  나중에 추가하면 이미 커밋된 파일의 정규화가 바뀌지 않아
+#  `git add --renormalize` 커밋이 따로 필요해지고,
+#  그 커밋이 "전 파일 변경"으로 잡혀 히스토리 가독성이 망가진다.
+# ============================================================
+
+# --- 기본 정책 ---
+# eol=lf 를 명시한다. text=auto 만 두면 작업 트리 줄바꿈이 각자의
+# core.autocrlf 에 좌우되고, 설정이 갈리는 순간 diff 가 파일 전체로 부푼다.
+
+* text=auto eol=lf
+
+# --- ★ 배치 파일은 CRLF 여야 실행된다 ---
+#
+# LF 로 저장된 .bat 은 cmd 가 토큰을 깨먹는다.
+# (2026-08-13 에 실제로 당함: `setlocal enabledelayedexpansion` 의 e 가 잘려나갔다)
+
+*.bat            text eol=crlf
+*.cmd            text eol=crlf
+*.ps1            text eol=crlf
+*.sh             text eol=lf
+
+# --- 소스 · 문서 ---
+
+*.c              text eol=lf
+*.h              text eol=lf
+*.md             text eol=lf
+*.txt            text eol=lf
+*.json           text eol=lf
+*.yml            text eol=lf
+
+# --- 바이너리 ---
+# ⚠️ 여기 없는 확장자가 text=auto 로 잘못 정규화되면 파일이 깨진다.
+#    새 에셋 포맷을 추가할 때 이 목록을 먼저 확인할 것.
+
+*.png            binary
+*.jpg            binary
+*.gif            binary
+*.bmp            binary
+*.ico            binary
+*.aseprite       binary
+*.ase            binary
+*.wav            binary
+*.ogg            binary
+*.mp3            binary
+*.xm             binary
+*.mod            binary
+*.it             binary
+*.s3m            binary
+*.ttf            binary
+*.otf            binary
+*.exe            binary
+*.dll            binary
+*.lib            binary
+*.obj            binary
+*.zip            binary
+
+# --- linguist (GitHub 언어 통계) ---
+
+docs/**          linguist-documentation
+*.md             linguist-documentation

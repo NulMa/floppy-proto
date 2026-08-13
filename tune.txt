@@ -1,0 +1,38 @@
+# 감각 수치 — 게임 안에서 F5 를 누르면 재빌드 없이 다시 읽는다.
+# "이름 값" 한 줄에 하나. # 은 주석.
+#
+# 여기 있는 숫자는 전부 기획/디렉팅이 정할 것들이다.
+# 코드를 안 건드리고 이 파일만 고쳐서 감각을 맞춰라.
+
+# --- 기본 이동 ---
+gravity          900
+jumpVel          -262      # 음수. 현재 정점 38px = 2.4타일
+jumpCut          0.45      # 점프키를 일찍 떼면 상승속도를 이만큼 깎는다
+maxFall          420
+accelGround      1500
+accelAir         900
+maxSpeed         128       # px/s. 16px 타일 기준 초당 8타일
+frictionGround   1700
+frictionAir      320
+coyoteTime       0.09      # 발판에서 떨어진 뒤에도 점프가 먹히는 시간
+jumpBuffer       0.10      # 착지 전에 미리 누른 점프를 기억하는 시간
+
+# --- jump2.exe (5칸) 2단 점프 ---
+jump2Mult        0.92      # 2단 점프 세기 (1단 대비). 1.0 이면 똑같은 높이
+
+# --- dash.exe (4칸) 공중 대시 ---
+dashSpeed        340
+dashTime         0.18
+dashCooldown     0.35
+
+# --- glide.exe (4칸) 활공 ---
+glideFall        70        # 활공 중 최대 낙하속도. 낮을수록 오래 뜬다
+
+# --- grip.exe (4칸) 벽 타기 ---
+gripSlide        60        # 벽에 붙어 미끄러지는 속도
+gripJumpX        190       # 벽 점프 수평 세기
+gripJumpY        -250      # 벽 점프 수직 세기
+gripStick        0.12      # 벽 점프 직후 방향키가 안 먹는 시간 (벽에 도로 붙는 것 방지)
+
+# --- boot.exe (3칸) 점프력 증가 ---
+bootMult         1.20      # 55px = 3.4타일

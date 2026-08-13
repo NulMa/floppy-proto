@@ -1,0 +1,21 @@
+# 빌드 산출물
+/build/
+
+# 외부 의존성 — 90MB. 저장소에 넣지 않는다.
+# 새로 클론했으면 fetch-deps.bat 을 먼저 돌린다.
+/vendor/
+
+# 컴파일 부산물 (혹시 밖으로 샜을 때)
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.lib
+
+# 게임이 남기는 것
+shot*.png
+
+# 편집기
+.vs/
+*.user
+*.suo
