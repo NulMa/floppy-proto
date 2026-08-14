@@ -124,6 +124,11 @@ static void draw_hints(const World *w, int camX)
 
     for (int i = 0; i < L->hintCount; i++) {
         const HintSpec *h = &L->hints[i];
+
+        /* ★ 능력 사용법은 **막 얻은 스테이지에서만** 알려준다.
+         *   관문마다 답을 적어두면 플레이어가 전략을 짜는 게 아니라 지시를 따르게 된다. */
+        if (h->teaches && hint_school_level(h->teaches) != w->levelIndex) continue;
+
         int ax = h->x * TILE + TILE / 2 - camX;
         int ay = h->y * TILE;
 

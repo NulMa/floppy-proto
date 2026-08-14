@@ -14,31 +14,115 @@ static void check(int cond, const char *what)
     if (!cond) failures++;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ *  도달 범위 — **실제 sim.c 물리를 그대로 따라간다.**
+ *
+ *  ★ 예전 공식은 두 가지를 빼먹어서 dash 를 2칸 넘게 **과소평가**했다.
+ *    사람이 "활공 구간을 점프+대시로 깼다"고 알려주고 나서야 잡혔다.
+ *
+ *    ① 코요테 타임 — 발판을 벗어난 뒤 0.09초 동안 점프할 수 있다.
+ *       그 사이에도 128px/s 로 나아가므로 **모든 가로 도달거리에 11.5px 이 붙는다.**
+ *
+ *    ② 대시는 중력을 멈춘다 (sim.c: dashTimer 동안 vy=0, 중력 스킵).
+ *       그래서 대시 시간은 낙하 시간에 안 들어간다 — 가로로 공짜 61px 이다.
+ *       게다가 **낙하 도중에 쓰면 쌓인 낙하속도가 지워져** 체공이 오히려 늘어난다.
+ *       낙하 거리의 절반에서 쓸 때가 최대다.
+ *
+ *  두 번째가 특히 위험하다. "대시 = 조금 더 멀리 가는 점프"가 아니라
+ *  **낙차가 클수록 이득이 커지는 능력**이다. 활공의 자리를 침범한다.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* 정지 상태에서 h px 낙하하는 데 걸리는 시간 (종단속도 반영) */
+static float fall_time(const Tune *t, float h)
+{
+    float g = t->gravity;
+    float tCap = t->maxFall / g, dCap = t->maxFall * t->maxFall / (2.0f * g);
+    if (h <= dCap) return sqrtf(2.0f * h / g);
+    return tCap + (h - dCap) / t->maxFall;
+}
+
+static float rise_h(const Tune *t, float v0) { return v0 * v0 / (2.0f * t->gravity); }
+
+/* 발판을 벗어난 뒤에도 점프가 되는 만큼 가로로 더 간다 */
+static float coyote_gain(const Tune *t) { return t->maxSpeed * t->coyoteTime; }
+
+/* 초속 v0 로 뛰어올라 drop px 아래에 착지할 때까지의 체공 시간 */
+static float air_time(const Tune *t, float v0, float drop)
+{
+    return v0 / t->gravity + fall_time(t, rise_h(t, v0) + drop);
+}
+
+/* 같은 조건에서 **대시를 가장 유리한 타이밍(낙하 절반)에 쓴** 체공 시간.
+ * 대시 자체의 0.18초는 중력이 멈추므로 여기 안 들어간다 — 가로 거리에만 더한다. */
+static float air_time_dashed(const Tune *t, float v0, float drop)
+{
+    float H = rise_h(t, v0) + drop;
+    return v0 / t->gravity + 2.0f * fall_time(t, H * 0.5f);
+}
+
+/* 2단 점프 — 정점에서 한 번 더 */
+static float air_time_jump2(const Tune *t, float v0, float drop)
+{
+    float v2 = v0 * t->jump2Mult;
+    return (v0 + v2) / t->gravity + fall_time(t, rise_h(t, v0) + rise_h(t, v2) + drop);
+}
+
+/* 활공 — 하강 내내 낙하속도가 glideFall 로 묶인다 */
+static float air_time_glide(const Tune *t, float v0, float drop)
+{
+    return v0 / t->gravity + (rise_h(t, v0) + drop) / t->glideFall;
+}
+
+static float reach(const Tune *t, float airTime, int dashing)
+{
+    return t->maxSpeed * airTime + (dashing ? t->dashSpeed * t->dashTime : 0.0f) + coyote_gain(t);
+}
+
 typedef struct {
-    float baseH, bootH, jump2H;
+    float baseH, bootH, jump2H, bootJump2H;
     float baseD, bootD, dashD, jump2D, lowCeilD;
 } Reach;
 
 static Reach reach_of(const Tune *t)
 {
     Reach r;
-    float g = t->gravity, v = t->maxSpeed;
-    r.baseH  = (t->jumpVel * t->jumpVel) / (2.0f * g);
-    float bootV = t->jumpVel * t->bootMult;
-    r.bootH  = (bootV * bootV) / (2.0f * g);
-    float j2V = t->jumpVel * t->jump2Mult;
-    r.jump2H = r.baseH + (j2V * j2V) / (2.0f * g);
+    float v0 = fabsf(t->jumpVel), bv = v0 * t->bootMult;
 
-    float airBase = 2.0f * fabsf(t->jumpVel) / g;
-    r.baseD  = v * airBase;
-    r.bootD  = v * (2.0f * fabsf(bootV) / g);
-    r.dashD  = r.baseD + (t->dashSpeed - v) * t->dashTime;
-    r.jump2D = v * (airBase + 2.0f * fabsf(j2V) / g);
+    r.baseH  = rise_h(t, v0);
+    r.bootH  = rise_h(t, bv);
+    r.jump2H = rise_h(t, v0) + rise_h(t, v0 * t->jump2Mult);
+    /* ★ boot 와 jump2 를 같이 들면 2단 점프도 boot 배율을 받는다 — 6칸이 넘는다.
+     *   높이 관문을 설계할 때 이걸 빼먹으면 그냥 뚫린다 */
+    r.bootJump2H = rise_h(t, bv) + rise_h(t, bv * t->jump2Mult);
 
+    r.baseD  = reach(t, air_time(t, v0, 0.0f), 0);
+    r.bootD  = reach(t, air_time(t, bv, 0.0f), 0);
+    r.dashD  = reach(t, air_time_dashed(t, v0, 0.0f), 1);
+    r.jump2D = reach(t, air_time_jump2(t, v0, 0.0f), 0);
+
+    /* 저천장 2칸 통로 — 머리가 천장에 닿아 상승이 잘린다 */
     float head = 2.0f * TILE - PLAYER_H;
-    float tUp  = (fabsf(t->jumpVel) - sqrtf(fmaxf(0.0f, t->jumpVel * t->jumpVel - 2.0f * g * head))) / g;
-    r.lowCeilD = v * (tUp + sqrtf(2.0f * head / g));
+    float tUp  = (v0 - sqrtf(fmaxf(0.0f, v0 * v0 - 2.0f * t->gravity * head))) / t->gravity;
+    r.lowCeilD = t->maxSpeed * (tUp + sqrtf(2.0f * head / t->gravity)) + coyote_gain(t);
     return r;
+}
+
+/* 낙차가 있는 구덩이를 **가장 좋은 단일 조합**으로 건널 때의 가로 도달거리.
+ * 레벨 관문은 "막고 싶은 조합"의 값보다 넓고 "통과시킬 조합"의 값보다 좁아야 한다. */
+static float reach_drop_dash(const Tune *t, float drop, int boot)
+{
+    float v0 = fabsf(t->jumpVel) * (boot ? t->bootMult : 1.0f);
+    return reach(t, air_time_dashed(t, v0, drop), 1);
+}
+static float reach_drop_glide(const Tune *t, float drop, int boot)
+{
+    float v0 = fabsf(t->jumpVel) * (boot ? t->bootMult : 1.0f);
+    return reach(t, air_time_glide(t, v0, drop), 0);
+}
+static float reach_drop_plain(const Tune *t, float drop, int boot)
+{
+    float v0 = fabsf(t->jumpVel) * (boot ? t->bootMult : 1.0f);
+    return reach(t, air_time(t, v0, drop), 0);
 }
 
 static int surface_row(const World *w, int c)
@@ -87,12 +171,21 @@ int main(void)
     char label[160], names[160];
 
     printf("\n== 능력별 도달 범위 (tune.txt 기준) ==\n");
-    printf("  높이  맨몸 %.1f칸  boot %.1f칸  jump2 %.1f칸  grip 제한없음\n",
-           R.baseH / TILE, R.bootH / TILE, R.jump2H / TILE);
+    printf("  높이  맨몸 %.1f칸  boot %.1f칸  jump2 %.1f칸  boot+jump2 %.1f칸  grip 제한없음\n",
+           R.baseH / TILE, R.bootH / TILE, R.jump2H / TILE, R.bootJump2H / TILE);
     printf("  거리  맨몸 %.1f칸  boot %.1f칸  dash %.1f칸  jump2 %.1f칸  저천장 %.1f칸\n",
            R.baseD / TILE, R.bootD / TILE, R.dashD / TILE, R.jump2D / TILE, R.lowCeilD / TILE);
-    printf("  활공  D px 하강 시 가로 %.2f * D px  (5칸 하강 → %.1f칸)\n",
-           t.maxSpeed / t.glideFall, (t.maxSpeed / t.glideFall) * 80.0f / TILE);
+    printf("        (코요테 %.0fpx 포함. 대시는 중력이 멈추는 것까지 반영한 값이다)\n",
+           coyote_gain(&t));
+    printf("  낙차별 가로 도달거리 — 활공만 통과시키려면 이 사이를 노려야 한다\n");
+    printf("    낙차   맨몸   boot  boot+dash   활공   boot+활공\n");
+    for (int d = 3; d <= 7; d++) {
+        float D = (float)(d * TILE);
+        printf("    %d칸  %5.1f  %5.1f      %5.1f  %5.1f      %5.1f   (칸)\n", d,
+               reach_drop_plain(&t, D, 0) / TILE, reach_drop_plain(&t, D, 1) / TILE,
+               reach_drop_dash(&t, D, 1) / TILE,
+               reach_drop_glide(&t, D, 0) / TILE, reach_drop_glide(&t, D, 1) / TILE);
+    }
 
     /* ── 용량 ── */
     printf("\n== 레벨 데이터 용량 ==\n");
@@ -336,11 +429,15 @@ int main(void)
             if (prev >= 0 && s - prev > drop) drop = s - prev;
             prev = s;
         }
-        float glideReach = (t.maxSpeed / t.glideFall) * (float)(drop * TILE);
-        printf("  %s 최대 구덩이 %.0fpx / 최대 낙차 %d칸 / 활공 도달 %.0fpx\n",
-               L->id, gap, drop, glideReach);
-        snprintf(label, sizeof(label), "%s: dash 로는 못 건넌다 (활공 구간)", L->id);
-        check(gap > R.dashD, label);
+        /* ★ 막을 것은 dash 가 아니라 **boot+dash** 다. 그 조합이 11칸이라 항상 들 수 있고,
+         *   낙차가 클수록 대시의 이득이 커진다 (중력 정지 + 낙하속도 초기화). */
+        float D = (float)(drop * TILE);
+        float dashReach  = reach_drop_dash(&t, D, 1);
+        float glideReach = reach_drop_glide(&t, D, 0);
+        printf("  %s 최대 구덩이 %.0fpx / 최대 낙차 %d칸 / boot+dash %.0fpx / 활공 %.0fpx\n",
+               L->id, gap, drop, dashReach, glideReach);
+        snprintf(label, sizeof(label), "%s: boot+dash 로는 못 건넌다 (활공 구간)", L->id);
+        check(gap > dashReach, label);
         snprintf(label, sizeof(label), "%s: 활공이면 건너진다", L->id);
         check(gap <= glideReach, label);
     }
@@ -389,6 +486,97 @@ int main(void)
             if (s1 && s2 && s3) masterKey = 1;
         }
         check(!masterKey, "단독으로 전 구간을 여는 능력이 없다");
+    }
+
+    /* ── 튜토리얼은 능력당 한 번 ────────────────────────────────────
+     *
+     * ★ 예전엔 관문마다 답이 벽에 붙어 있었다. 그러면 플레이어가 전략을 짜는 게 아니라
+     *   지시를 수행한다 — "무엇을 들고 갈까"가 전부인 게임에서 고를 것이 없어진다.
+     *   teaches 가 붙은 힌트는 그 능력을 막 얻은 스테이지에서만 뜬다. */
+    printf("\n== 튜토리얼 노출 ==\n");
+    {
+        int taughtIn[AB_COUNT];
+        int shown = 0, hidden = 0;
+        for (int a = 0; a < AB_COUNT; a++) taughtIn[a] = 0;
+
+        for (int i = 0; i < LEVEL_COUNT; i++) {
+            const Level *L = &LEVELS[i];
+            for (int h = 0; h < L->hintCount; h++) {
+                unsigned tc = L->hints[h].teaches;
+                if (!tc) continue;
+                int bits = 0, which = -1;
+                for (int a = 0; a < AB_COUNT; a++) if (tc & AB_BIT(a)) { bits++; which = a; }
+                snprintf(label, sizeof(label), "%s: 튜토리얼 힌트는 능력 하나만 가리킨다", L->id);
+                check(bits == 1, label);
+                if (which < 0) continue;
+                if (hint_school_level(AB_BIT(which)) == i) { taughtIn[which]++; shown++; }
+                else hidden++;
+            }
+        }
+        printf("  능력 힌트 %d개 중 교실에서 %d개만 뜬다 (%d개는 숨는다)\n",
+               shown + hidden, shown, hidden);
+        for (int a = 0; a < AB_COUNT; a++) {
+            int sc = hint_school_level(AB_BIT(a));
+            printf("    %-10s 교실 %s · 힌트 %d개\n", ABILITY_FILE[a],
+                   (sc >= 0) ? LEVELS[sc].id : "-", taughtIn[a]);
+            snprintf(label, sizeof(label), "%s 는 해금 직후에 정확히 한 번 설명된다", ABILITY_FILE[a]);
+            check(taughtIn[a] == 1, label);
+        }
+    }
+
+    /* ── 09 · 20: jump2 관문이 grip 으로 안 뚫리는가 ──────────────────
+     *
+     * ★ 벽 모양으로는 grip 을 막을 수 없다. 잡기 판정이 "머리가 벽면에 닿으면"이라
+     *   맨몸 점프로 닿는 52px 위까지는 어떤 형태로 파도 잡힌다.
+     *   ㄱ자로 처마를 내면 그 처마의 옆면이 또 벽이 된다.
+     *
+     *   **원웨이 발판만이 T_SOLID 가 아니라 grip 이 안 붙는다.** 그래서 높이 관문은
+     *   턱이 아니라 "구덩이 위에 뜬 원웨이 선반"이어야 한다. 이 절이 그걸 지킨다. */
+    printf("\n== jump2 관문 (원웨이 선반) ==\n");
+    {
+        const int gate[] = { 8, 19 };   /* s09, s20 */
+        float flatDash = reach_drop_dash(&t, 0.0f, 1);   /* boot+dash 로 닿는 최대 가로 */
+        for (int k = 0; k < (int)(sizeof(gate) / sizeof(gate[0])); k++) {
+            memset(&w, 0, sizeof(w));
+            sim_load(&w, &t, gate[k]);
+            const Level *L = sim_level(&w);
+
+            int sr = -1, sc = -1;
+            for (int c = 1; c < L->width - 1 && sr < 0; c++)
+                for (int r = 1; r < MAP_H; r++)
+                    if (w.map[r][c] == T_ONEWAY) { sr = r; sc = c; break; }
+
+            snprintf(label, sizeof(label), "%s: 높이 관문이 원웨이 선반이다 (턱이 아니다)", L->id);
+            check(sr >= 0, label);
+            if (sr < 0) continue;
+
+            /* 선반 왼쪽에서 발판이 끊기는 지점 = 뛰어오르는 자리 */
+            int edge = sc;
+            while (edge > 1 && surface_row(&w, edge) < 0) edge--;
+            int floorR = surface_row(&w, edge);
+            float rise = (float)(floorR - sr) * TILE;
+
+            /* 그 발판 끝에서 다음 **솔리드** 벽까지 — 여기 닿으면 grip 으로 기어오른다 */
+            int nextSolid = L->width - 1;
+            for (int c = edge + 1; c < L->width - 1; c++) {
+                int solid = 0;
+                for (int r = 1; r < MAP_H; r++) if (w.map[r][c] == T_SOLID) solid = 1;
+                if (solid) { nextSolid = c; break; }
+            }
+            float wallGap = (float)(nextSolid - edge - 1) * TILE;
+
+            printf("  %s 선반 높이 %.0fpx / 건너편 벽까지 %.0fpx  (boot %.0f · jump2 %.0f · boot+jump2 %.0f · boot+dash %.0f)\n",
+                   L->id, rise, wallGap, R.bootH, R.jump2H, R.bootJump2H, flatDash);
+
+            snprintf(label, sizeof(label), "%s: boot 단독으로는 선반에 못 오른다", L->id);
+            check(rise > R.bootH, label);
+            snprintf(label, sizeof(label), "%s: jump2 단독으로도 못 오른다 (boot 를 같이 들어야 한다)", L->id);
+            check(rise > R.jump2H, label);
+            snprintf(label, sizeof(label), "%s: boot+jump2 면 오른다", L->id);
+            check(rise <= R.bootJump2H, label);
+            snprintf(label, sizeof(label), "%s: 건너편 벽이 멀어서 grip 으로 못 돌아간다", L->id);
+            check(wallGap > flatDash, label);
+        }
     }
 
     /* ── 이벤트 ────────────────────────────────────────────────────

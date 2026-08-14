@@ -18,12 +18,30 @@ typedef struct { short x, y; unsigned short avail; } TermSpec;
  * (화면 밖은 카메라가 알아서 잘라내므로 별도 범위 판정이 필요 없다)
  *
  * keys: 키 표기. 공백 구분. NULL 이면 없음. 예) "< >"  "SPACE"  "1"
- *       렌더에서 [ ] 로 감싸 텍스트로 그린다 */
+ *       렌더에서 [ ] 로 감싸 텍스트로 그린다
+ *
+ * teaches: 이 힌트가 **가르치는** 능력 비트. 0 이면 항상 뜬다(지형 경고·서사).
+ *
+ *   ★ 능력 사용법은 **해금 직후 한 번만** 알려준다.
+ *
+ *     예전엔 모든 스테이지의 모든 관문 위에 "여기선 dash 를 써라"가 떠 있었다.
+ *     그러면 플레이어가 전략을 짜는 게 아니라 **지시를 수행**하게 된다.
+ *     이 게임은 "무엇을 들고 갈까"가 전부인데, 답을 벽에 써 붙여두면
+ *     고를 것이 남지 않는다.
+ *
+ *     그래서 teaches 가 붙은 힌트는 그 능력을 **막 얻은 스테이지에서만** 뜬다.
+ *     어느 스테이지인지는 LEVELS 의 reward 에서 자동으로 나온다 —
+ *     능력을 준 스테이지의 바로 다음이다. 손으로 적지 않는다. */
 typedef struct {
     short x, y;
     const char *keys;
     const char *l1, *l2;
+    unsigned teaches;
 } HintSpec;
+
+/* 그 능력을 처음 쓰는 스테이지 인덱스. 없으면 -1.
+ * boot 는 처음부터 갖고 있으므로 0 (s01). */
+int hint_school_level(unsigned ability);
 
 typedef struct {
     const char *id;          /* "s00" */

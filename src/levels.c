@@ -39,7 +39,7 @@ static const HintSpec L01_HINT[] = {
     {  5,  9, 0,       "TERMINAL",          "the format stops here" },
     { 10, 13, "SPACE", "JUMP",              "hold longer to go higher" },
     { 13,  8, 0,       "FORMAT IS COMING",  "keep moving right" },
-    { 19, 11, "1",     "LOAD boot.exe",     "the ledge needs it" },
+    { 19, 11, "1",     "LOAD boot.exe",     "the ledge needs it",  AB(AB_BOOT) },
     { 28, 10, 0,       "SPIKES",            "jump over them" },
     { 34, 13, 0,       "JUMP PAD",          "it throws you up" },
     { 38,  6, 0,       "AUTOEXEC.BAT",      "optional - it holds a utility" },
@@ -49,29 +49,36 @@ static const HintSpec L01_HINT[] = {
 /* ══════════════════════════════════════════════════════════════════════
  *  02 — CONFIG.SYS   [쉬움]   보상: 없음
  *
- *  dash 를 쓰게 만든다. 6칸 구덩이(96px)는 boot(89px)로 안 되고 dash(113px)로만 된다.
+ *  dash 를 쓰게 만든다.
+ *
+ *  ★ 원래 6칸(96px)이었다. **boot 로도 건너졌다** — 코요테 타임(0.09초 = 12px)을
+ *    계산에 안 넣어서 boot 를 89px 로 봤는데 실제로는 101px 이다.
+ *    8칸(128px)으로 넓혔다: boot 101 ✗ / dash 163 ✓.
  *  턱은 그대로 boot. 두 능력을 번갈아 쓰는 감각만 붙이면 된다.
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box L02_BOX[] = {
-    {  0,  0, 60,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 59,  0,  1, 18, T_SOLID },
-    {  1, 15, 25,  3, T_SOLID },
-    { 12, 12,  4,  6, T_SOLID },      /* 3칸 턱 — boot */
-    { 26, 17,  6,  1, T_SPIKE },      /* 6칸 구덩이 — dash */
-    { 32, 15, 10,  3, T_SOLID },
-    { 37, 14,  2,  1, T_SPIKE },
-    { 42, 17,  6,  1, T_SPIKE },      /* 6칸 구덩이 — dash */
-    /* 轉: 마지막 착지가 2칸 높다. 대시만으로는 안 되고 점프를 겹쳐야 한다 */
-    { 48, 13, 11,  5, T_SOLID },
+    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  1, 15, 22,  3, T_SOLID },
+    { 11, 12,  4,  6, T_SOLID },      /* 3칸 턱 — boot */
+    { 23, 17,  8,  1, T_SPIKE },      /* 8칸 구덩이 — dash */
+    { 31, 15,  9,  3, T_SOLID },
+    { 35, 14,  2,  1, T_SPIKE },
+    { 40, 17,  8,  1, T_SPIKE },      /* 8칸 구덩이 — dash */
+    { 48, 15,  6,  3, T_SOLID },
+    /* 轉: 마지막 착지가 2칸 높다. 7칸이라 대시 단독(131px)으로도 되지만
+     * boot 를 겹치면(158px) 훨씬 편하다 — boot 단독은 77px 라 절대 안 된다 */
+    { 54, 17,  7,  1, T_SPIKE },
+    { 61, 13, 10,  5, T_SOLID },
 };
-static const TermSpec L02_TERM[] = { { 3, 14, 0 }, { 34, 14, 0 } };
+static const TermSpec L02_TERM[] = { { 3, 14, 0 }, { 32, 14, 0 }, { 49, 14, 0 } };
 static const HintSpec L02_HINT[] = {
     {  3, 12, 0,       "TERMINAL",       "dash.exe is yours now" },
-    { 13, 10, "1",     "boot.exe",       "gets you up" },
-    { 26, 12, "SHIFT", "dash.exe",       "gets you across" },
-    { 37, 11, 0,       "SPIKES",         0 },
-    { 44, 11, 0,       "THIS ONE LANDS HIGH", "jump and dash together" },
-    { 54,  9, 0,       "CONFIG.SYS",     0 },
-    { 57, 10, 0,       "DRIVE SLOT",     0 },
+    { 12, 10, "1",     "boot.exe",       "gets you up",           AB(AB_BOOT) },
+    { 23, 12, "SHIFT", "dash.exe",       "gets you across",       AB(AB_DASH) },
+    { 35, 11, 0,       "SPIKES",         0 },
+    { 56, 11, 0,       "THIS ONE LANDS HIGH", "jump and dash together" },
+    { 65,  9, 0,       "CONFIG.SYS",     0 },
+    { 68, 10, 0,       "DRIVE SLOT",     0 },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -101,7 +108,7 @@ static const TermSpec L03_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 } };
 static const HintSpec L03_HINT[] = {
     {  3, 12, 0,       "TERMINAL",         0 },
     { 12, 12, 0,       "LOW CEILING AHEAD", "a jump reaches 2 tiles there" },
-    { 22, 11, "SHIFT", "dash.exe",         "the only way over" },
+    { 22, 11, "SHIFT", "dash.exe",         "the only way over", AB(AB_DASH) },
     { 44, 11, 0,       "KEEP GOING",       0 },
     { 58, 12, 0,       "LETTER.TXT",       "never sent" },
     { 61, 13, 0,       "DRIVE SLOT",       0 },
@@ -110,8 +117,14 @@ static const HintSpec L03_HINT[] = {
 /* ══════════════════════════════════════════════════════════════════════
  *  04 — SONG.MOD   [쉬움]   보상: 없음
  *
- *  활공의 집. 9칸 구덩이를 5칸 내려가며 건넌다.
- *    glide 10.6칸 ✓ / dash 8.8칸 ✗ / 맨몸+점프 6.4칸 ✗
+ *  활공의 집. 16칸 구덩이를 5칸 내려가며 건넌다.
+ *    활공 18.8칸 ✓ / boot+dash 13.5칸 ✗ / boot 8.0칸 ✗
+ *
+ *  ★ 원래 9칸이었고 **점프 후 대시로 그냥 건너졌다.** 사람이 알려줘서 잡혔다.
+ *    대시를 "조금 더 먼 점프"로 봤던 게 틀렸다 — 대시는 중력을 멈추고,
+ *    낙하 도중에 쓰면 쌓인 낙하속도까지 지운다. 낙차가 클수록 이득이 커져서
+ *    **활공의 자리를 그대로 침범한다.** 5칸 낙차에서 boot+dash 는 217px 이다.
+ *    조작감을 건드리지 않고 구덩이를 16칸(256px)으로 벌려서 갈랐다.
  *
  *  ★ 굴뚝을 세로로 파면 가로 파동이 안 쫓아와서 압박이 사라진다.
  *    그래서 **대각선으로 내려가게** 배치했다 (D-37 안 ②).
@@ -120,26 +133,26 @@ static const HintSpec L03_HINT[] = {
 /* ★ 시작 표면을 row4 아래로 둔다. row2 에서 시작하면 플레이어가
  *   상단 HUD 바(0~30px = row0~1) 뒤에 깔려서 안 보인다. */
 static const Box L04_BOX[] = {
-    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  0,  0, 86,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 85,  0,  1, 18, T_SOLID },
     {  1,  4,  9,  2, T_SOLID },      /* 표면 row4 */
-    { 10, 17,  9,  1, T_SPIKE },
-    { 19,  9,  9,  2, T_SOLID },      /* 표면 row9  (5칸 하강, 9칸 구덩이) */
-    { 28, 17,  9,  1, T_SPIKE },
-    { 37, 14,  9,  2, T_SOLID },      /* 표면 row14 (5칸 하강, 9칸 구덩이) */
-    { 46, 17,  5,  1, T_SPIKE },
+    { 10, 17, 16,  1, T_SPIKE },
+    { 26,  9,  9,  2, T_SOLID },      /* 표면 row9  (5칸 하강, 16칸 구덩이) */
+    { 35, 17, 16,  1, T_SPIKE },
+    { 51, 14,  9,  2, T_SOLID },      /* 표면 row14 (5칸 하강, 16칸 구덩이) */
+    { 60, 17,  5,  1, T_SPIKE },
     /* 轉: 마지막 착지가 3칸뿐이다. 거리가 아니라 **멈추는 정확도**가 문제 */
-    { 51, 17,  3,  1, T_SOLID },
-    { 54, 17,  4,  1, T_SPIKE },
-    { 58, 17, 13,  1, T_SOLID },
+    { 65, 17,  3,  1, T_SOLID },
+    { 68, 17,  4,  1, T_SPIKE },
+    { 72, 17, 13,  1, T_SOLID },
 };
-static const TermSpec L04_TERM[] = { { 3, 3, 0 }, { 21, 8, 0 }, { 39, 13, 0 } };
+static const TermSpec L04_TERM[] = { { 3, 3, 0 }, { 28, 8, 0 }, { 53, 13, 0 } };
 static const HintSpec L04_HINT[] = {
     {  4,  3, 0,       "A LONG WAY DOWN",   0 },
-    { 10,  3, "3",     "glide.exe",         "hold jump while falling" },
-    { 21,  7, 0,       "DASH IS TOO SHORT", "you have to fall slowly" },
-    { 39, 12, 0,       "ONE MORE",          0 },
-    { 65, 15, 0,       "SONG.MOD",          "4 channels, 3:12" },
-    { 68, 16, 0,       "DRIVE SLOT",        0 },
+    { 10,  3, "3",     "glide.exe",         "hold jump while falling", AB(AB_GLIDE) },
+    { 28,  7, 0,       "DASH IS TOO SHORT", "you have to fall slowly" },
+    { 53, 12, 0,       "ONE MORE",          0 },
+    { 79, 15, 0,       "SONG.MOD",          "4 channels, 3:12" },
+    { 82, 16, 0,       "DRIVE SLOT",        0 },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -150,22 +163,22 @@ static const HintSpec L04_HINT[] = {
  *     "무엇을 두고 갈까"는 grip 을 받는 다음 스테이지부터 시작된다)
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box L05_BOX[] = {
-    {  0,  0, 76,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 75,  0,  1, 18, T_SOLID },
+    {  0,  0, 84,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 83,  0,  1, 18, T_SOLID },
     {  1,  8, 12,  2, T_SOLID },      /* 표면 row8 */
-    { 13, 17,  6,  1, T_SPIKE },      /* 6칸 평지 구덩이 — dash */
-    { 19,  8, 10,  2, T_SOLID },
-    { 29, 17,  6,  1, T_SPIKE },      /* 6칸 — dash */
-    { 35,  8, 10,  2, T_SOLID },
-    { 45, 17,  9,  1, T_SPIKE },      /* 9칸 + 5칸 하강 — glide */
-    { 54, 13, 20,  2, T_SOLID },      /* 표면 row13 */
+    { 13, 17,  8,  1, T_SPIKE },      /* 8칸 평지 구덩이 — dash (boot 는 6.3칸까지) */
+    { 21,  8, 10,  2, T_SOLID },
+    { 31, 17,  8,  1, T_SPIKE },      /* 8칸 — dash */
+    { 39,  8, 10,  2, T_SOLID },
+    { 49, 17, 16,  1, T_SPIKE },      /* 16칸 + 5칸 하강 — glide 전용 */
+    { 65, 13, 18,  2, T_SOLID },      /* 표면 row13 */
 };
-static const TermSpec L05_TERM[] = { { 3, 7, 0 }, { 40, 7, 0 }, { 58, 12, 0 } };
+static const TermSpec L05_TERM[] = { { 3, 7, 0 }, { 41, 7, 0 }, { 69, 12, 0 } };
 static const HintSpec L05_HINT[] = {
     {  3,  6, 0,       "BOTH TOOLS TODAY", 0 },
-    { 13,  6, "SHIFT", "dash.exe",         "flat gaps" },
-    { 45,  6, "3",     "glide.exe",        "this one drops" },
-    { 68, 11, 0,       "PHOTO.PCX",        "scanned from paper" },
-    { 71, 12, 0,       "DRIVE SLOT",       0 },
+    { 13,  6, "SHIFT", "dash.exe",         "flat gaps",      AB(AB_DASH) },
+    { 49,  6, "3",     "glide.exe",        "this one drops", AB(AB_GLIDE) },
+    { 76, 11, 0,       "PHOTO.PCX",        "scanned from paper" },
+    { 79, 12, 0,       "DRIVE SLOT",       0 },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -189,7 +202,7 @@ static const Box L06_BOX[] = {
 static const TermSpec L06_TERM[] = { { 3, 14, 0 }, { 22, 3, 0 }, { 46, 14, 0 } };
 static const HintSpec L06_HINT[] = {
     {  3, 12, 0,       "15 SLOTS OF UTILITIES", "you have 12" },
-    { 16, 12, "4",     "grip.exe",              "jump at a wall and hold toward it" },
+    { 16, 12, "4",     "grip.exe",              "jump at a wall and hold toward it", AB(AB_GRIP) },
     { 16,  2, 0,       "ZIGZAG UP",             0 },
     { 27,  2, 0,       "THEN DROP",             0 },
     { 50, 12, 0,       "DIARY.TXT",             "entries stop in march" },
@@ -229,7 +242,7 @@ static const TermSpec L07_TERM[] = { { 2, 14, 0 }, { 29, 14, 0 }, { 58, 14, 0 } 
 static const HintSpec L07_HINT[] = {
     {  2, 12, 0,       "TWO WAYS PAST EACH PART", "pick what you brought" },
     { 17,  4, 0,       "grip.exe OR boot.exe",    0 },
-    { 33, 12, "SHIFT", "dash.exe",                "flat gaps" },
+    { 33, 12, "SHIFT", "dash.exe",                "flat gaps", AB(AB_DASH) },
     { 58, 12, 0,       "LOW CEILING BELOW",       "or climb over the top" },
     { 90, 13, 0,       "MAZE.DAT",                "someone mapped this by hand" },
 };
@@ -256,9 +269,9 @@ static const Box L08_BOX[] = {
 static const TermSpec L08_TERM[] = { { 3, 14, 0 }, { 20, 2, 0 }, { 40, 14, 0 } };
 static const HintSpec L08_HINT[] = {
     {  3, 12, 0,       "STRAIGHT UP",     0 },
-    {  8, 10, "1",     "boot.exe",        "3 tiles at a time" },
+    {  8, 10, "1",     "boot.exe",        "3 tiles at a time",   AB(AB_BOOT) },
     { 20,  1, 0,       "NOW DROP RIGHT",  0 },
-    { 43, 12, "4",     "grip.exe",        "12 tiles, no ledges" },
+    { 43, 12, "4",     "grip.exe",        "12 tiles, no ledges", AB(AB_GRIP) },
     { 52,  1, 0,       "THEME.MOD",       "his favourite" },
 };
 
@@ -266,24 +279,46 @@ static const HintSpec L08_HINT[] = {
  *  09 — SAVE02.DAT   [중간]   보상: 없음
  *
  *  여기서부터 20칸이다. jump2(5)+dash(4)+boot(3) = 정확히 12칸.
- *  4칸 턱(64px)은 boot(55px)로 안 되고 jump2(70px)로만 된다 — 두 능력을 다 요구한다.
+ *
+ *  ★ 원래 4칸 턱이었다. **grip 으로 그냥 올라가졌다** — 사람이 알려줘서 잡혔다.
+ *
+ *    벽 모양으로는 grip 을 못 막는다. 잡는 판정이 "머리가 벽면에 닿으면"이라
+ *    맨몸 점프로 닿는 52px 위까지는 어떤 형태든 잡힌다. 턱을 ㄱ자로 파도
+ *    그 처마의 옆면이 또 벽이 된다 — 벽을 만드는 한 언제나 열린다.
+ *
+ *    ★★ **원웨이 발판은 T_SOLID 가 아니라서 grip 이 붙지 않는다.**
+ *      게임 안에서 grip 을 확실히 막는 유일한 지형이다.
+ *      그래서 턱을 걷어내고 **구덩이 위에 뜬 원웨이 선반**으로 바꿨다:
+ *        grip   붙을 벽이 없다            ✗
+ *        boot   55px                     ✗
+ *        dash   가로 전용, 높이를 못 준다  ✗
+ *        jump2  70px                     ✗   ← 단독으로도 안 된다
+ *        boot+jump2  101px               ✓
+ *      선반을 5칸(80px)에 두면 **boot+jump2(8칸) + dash(4칸) = 정확히 12칸**.
+ *      "20칸 중 12칸"이라는 이 스테이지의 주제가 그대로 관문이 된다.
+ *
+ *    구덩이를 12칸으로 벌려 건너편 벽(x25)에 못 닿게 했다 —
+ *    boot+dash 로도 181px 이라 196px 을 못 넘는다. 선반이 유일한 길이다.
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box L09_BOX[] = {
-    {  0,  0, 68,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 67,  0,  1, 18, T_SOLID },
-    {  1, 15, 12,  3, T_SOLID },
-    { 13, 11, 12,  7, T_SOLID },      /* 4칸 턱 (surface row11) — jump2 */
-    { 25, 17,  6,  1, T_SPIKE },      /* 6칸 평지 구덩이 — dash */
-    { 31, 11, 10,  7, T_SOLID },
-    { 41,  7, 10, 11, T_SOLID },      /* 4칸 턱 (surface row7) — jump2 */
-    { 51, 17,  6,  1, T_SPIKE },      /* 6칸 — dash */
-    { 57,  7, 10, 11, T_SOLID },
+    {  0,  0, 76,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 75,  0,  1, 18, T_SOLID },
+    {  1, 15, 12,  3, T_SOLID },      /* 바닥 A  표면 row15 */
+    { 13, 17, 12,  1, T_SPIKE },      /* 12칸 구덩이 — 벽에 못 닿는 거리 */
+    { 16, 10,  7,  1, T_ONEWAY },     /* ★ 뜬 선반 5칸 위 — boot+jump2 전용 */
+    { 25, 11, 14,  7, T_SOLID },      /* 바닥 B  표면 row11 */
+    { 39, 17,  8,  1, T_SPIKE },      /* 8칸 평지 구덩이 — dash */
+    { 47, 11, 12,  7, T_SOLID },      /* 바닥 C  표면 row11 */
+    { 59, 17, 12,  1, T_SPIKE },      /* 12칸 구덩이 */
+    { 62,  6,  7,  1, T_ONEWAY },     /* ★ 두 번째 선반 5칸 위 */
+    { 71,  7,  4, 11, T_SOLID },      /* 꼭대기 표면 row7 */
 };
-static const TermSpec L09_TERM[] = { { 3, 14, 0 }, { 20, 10, 0 }, { 36, 10, 0 }, { 60, 6, 0 } };
+static const TermSpec L09_TERM[] = { { 3, 14, 0 }, { 28, 10, 0 }, { 50, 10, 0 }, { 72, 6, 0 } };
 static const HintSpec L09_HINT[] = {
-    {  3, 12, 0,       "20 SLOTS NOW",  "12 fit" },
-    { 13,  9, "5",     "jump2.exe",     "boot alone is 3 tiles" },
-    { 25,  9, "SHIFT", "dash.exe",      "and you still need this" },
-    { 63,  5, 0,       "SAVE02.DAT",    "a later save, same game" },
+    {  3, 12, 0,       "20 SLOTS NOW",    "12 fit" },
+    { 15,  7, "5",     "jump2.exe",       "with boot.exe - neither alone", AB(AB_JUMP2) },
+    { 21, 13, 0,       "NOTHING TO GRAB", "the shelf is not a wall" },
+    { 41,  9, "SHIFT", "dash.exe",        "and you still need this",      AB(AB_DASH) },
+    { 72,  4, 0,       "SAVE02.DAT",      "a later save, same game" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -339,8 +374,8 @@ static const Box L11_BOX[] = {
 static const TermSpec L11_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 49, 14, 0 } };
 static const HintSpec L11_HINT[] = {
     {  3, 12, 0,       "SPIKE FIELD",   "width decides what you need" },
-    { 16, 11, "1",     "boot.exe",      "5 tiles is too far bare" },
-    { 24, 11, "SHIFT", "dash.exe",      "for the pits" },
+    { 16, 11, "1",     "boot.exe",      "5 tiles is too far bare", AB(AB_BOOT) },
+    { 24, 11, "SHIFT", "dash.exe",      "for the pits",            AB(AB_DASH) },
     { 66, 12, 0,       "NOTES.TXT",     "half a sentence, then nothing" },
     { 69, 13, 0,       "DRIVE SLOT",    0 },
 };
@@ -367,7 +402,7 @@ static const TermSpec L12_TERM[] = { { 3, 14, 0 }, { 20, 2, 0 }, { 44, 14, 0 } }
 static const HintSpec L12_HINT[] = {
     {  3, 12, 0,       "JUMP PADS",   "step on, do not aim" },
     { 12,  7, 0,       "AGAIN",       0 },
-    { 22,  1, "3",     "glide.exe",   "12 tiles down, 15 across" },
+    { 22,  1, "3",     "glide.exe",   "12 tiles down, 15 across", AB(AB_GLIDE) },
     { 66, 12, 0,       "TRACK02.MOD", "an unfinished loop" },
     { 69, 13, 0,       "DRIVE SLOT",  0 },
 };
@@ -421,7 +456,7 @@ static const Box L14_BOX[] = {
 static const TermSpec L14_TERM[] = { { 3, 14, 0 }, { 50, 14, 0 } };
 static const HintSpec L14_HINT[] = {
     {  3, 12, 0,       "TWO TERMINALS",     "the second is far" },
-    { 30, 12, "1",     "boot.exe",          "for the step" },
+    { 30, 12, "1",     "boot.exe",          "for the step", AB(AB_BOOT) },
     { 50, 11, 0,       "LOW CEILING AHEAD", "dash under it" },
     { 90, 12, 0,       "BACKUP.ZIP",        "everything, once" },
     { 93, 13, 0,       "DRIVE SLOT",        0 },
@@ -453,8 +488,8 @@ static const Box L15_BOX[] = {
 static const TermSpec L15_TERM[] = { { 3, 14, 0 }, { 31, 14, 0 }, { 56, 14, 0 } };
 static const HintSpec L15_HINT[] = {
     {  3, 12, 0,       "THE DISK IS UP A SHAFT", "you do not need it to leave" },
-    { 33, 12, "SHIFT", "dash.exe",               0 },
-    { 70, 12, "4",     "grip.exe",               "if you want the disk" },
+    { 33, 12, "SHIFT", "dash.exe",               0,                      AB(AB_DASH) },
+    { 70, 12, "4",     "grip.exe",               "if you want the disk", AB(AB_GRIP) },
     { 78,  2, 0,       "INVOICE.TXT",            "unpaid" },
     { 84, 13, 0,       "DRIVE SLOT",             "right past the shaft" },
 };
@@ -486,8 +521,8 @@ static const Box L16_BOX[] = {
 static const TermSpec L16_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 58, 14, 0 }, { 73, 14, 0 } };
 static const HintSpec L16_HINT[] = {
     {  3, 12, 0,       "60 TILES OF LOW CEILING", "no jumping in there" },
-    { 23, 11, "SHIFT", "dash.exe",                "four gaps" },
-    { 74, 12, "4",     "THE CEILING ENDS",        "and now you have to climb" },
+    { 23, 11, "SHIFT", "dash.exe",                "four gaps", AB(AB_DASH) },
+    { 74, 12, 0,       "THE CEILING ENDS",        "and now you have to climb" },
     { 81,  6, 0,       "CRASH.LOG",               "the last thing it wrote" },
     { 84,  7, 0,       "DRIVE SLOT",              0 },
 };
@@ -516,7 +551,7 @@ static const Box L17_BOX[] = {
 static const TermSpec L17_TERM[] = { { 3, 14, 0 }, { 11, 14, 0 }, { 24, 3, 0 }, { 46, 14, 0 }, { 56, 2, 0 } };
 static const HintSpec L17_HINT[] = {
     {  3, 12, 0,       "TWO SHAFTS",  "nothing but spikes below" },
-    { 16, 12, "4",     "grip.exe",    "zigzag between the walls" },
+    { 16, 12, "4",     "grip.exe",    "zigzag between the walls", AB(AB_GRIP) },
     { 46, 12, 0,       "AGAIN, TALLER", 0 },
     { 74, 12, 0,       "KERNEL.SYS",  "the part that never crashed" },
     { 77, 13, 0,       "DRIVE SLOT",  0 },
@@ -552,8 +587,11 @@ static const TermSpec L18_TERM[] = {
 };
 static const HintSpec L18_HINT[] = {
     {  3, 12, 0,       "EACH TERMINAL HAS ONE TOOL", "you cannot carry all three" },
-    { 41, 12, "4",     "grip.exe only here",         0 },
-    { 58,  1, "3",     "glide.exe only here",        0 },
+    /* ★ 원래 "grip.exe only here" / "glide.exe only here" 였다.
+     *   갈림길이 있다는 **정보**는 남기고 답은 지운다 — 뭘 들고 왔는지에 따라
+     *   길이 갈리는 게 이 스테이지의 전부인데, 답을 적어두면 고를 것이 없어진다. */
+    { 41, 12, 0,       "TWO WAYS UP",                "one of them is yours" },
+    { 58,  1, 0,       "THE OTHER WAY",              0 },
     { 90, 12, 0,       "LASTMAIL.TXT",               "sent, no reply" },
     { 93, 13, 0,       "DRIVE SLOT",                 0 },
 };
@@ -604,25 +642,26 @@ static const HintSpec L19_HINT[] = {
  *    그 규칙은 선택 회수물을 위한 것이고, 여기 디스크는 목표 그 자체다.
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box L20_BOX[] = {
-    {  0,  0, 90,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 89,  0,  1, 18, T_SOLID },
+    {  0,  0, 96,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 95,  0,  1, 18, T_SOLID },
     {  1, 15, 16,  3, T_SOLID },
-    { 17, 17,  6,  1, T_SPIKE },      /* 6칸 → dash */
-    { 23, 15, 12,  3, T_SOLID },
-    { 27, 11,  6,  4, T_SOLID },      /* 4칸 턱 (surface row11) → jump2 */
-    { 35, 17,  6,  1, T_SPIKE },      /* 6칸 → dash */
-    { 41, 15, 30,  3, T_SOLID },      /* x41~70 — 여기 터미널과 디스크가 있다 */
-    { 71, 17,  4,  1, T_SPIKE },      /* 4칸 → boot 로 넘어진다 */
-    { 75, 15, 14,  3, T_SOLID },
-    { 79, 12,  4,  3, T_SOLID },      /* 3칸 턱 → boot */
+    { 17, 17,  8,  1, T_SPIKE },      /* 8칸 → dash (boot 는 6.3칸까지) */
+    { 25, 15,  8,  3, T_SOLID },
+    { 33, 17, 12,  1, T_SPIKE },      /* 12칸 구덩이 */
+    { 36, 10,  7,  1, T_ONEWAY },     /* ★ 뜬 선반 5칸 위 → boot+jump2 (s09 와 같은 관문) */
+    { 45, 11, 26,  7, T_SOLID },      /* x45~70 표면 row11 — 여기 터미널과 디스크가 있다 */
+    { 71, 17,  4,  1, T_SPIKE },      /* 4칸 */
+    { 75, 15, 20,  3, T_SOLID },
+    { 79, 12,  4,  3, T_SOLID },      /* 3칸 턱 → boot 가 반드시 필요한 유일한 지점 */
 };
-static const TermSpec L20_TERM[] = { { 3, 14, 0 }, { 30, 10, 0 }, { 52, 14, 0 } };
+static const TermSpec L20_TERM[] = { { 3, 14, 0 }, { 28, 14, 0 }, { 50, 10, 0 }, { 77, 14, 0 } };
 static const HintSpec L20_HINT[] = {
     {  3, 12, 0,       "ME.IMG",            "the machine itself" },
-    { 30,  8, 0,       "LAST HARD PART",    0 },
-    { 52, 12, 0,       "DROP EVERYTHING",   "the image needs 9 slots" },
-    { 55,  9, 0,       "9 SLOTS",           "3 left - exactly boot.exe" },
-    { 71, 12, "1",     "boot.exe",          "all you started with" },
-    { 86, 12, 0,       "DRIVE SLOT",        "take it out" },
+    { 36,  7, 0,       "LAST HARD PART",    0 },
+    { 50,  8, 0,       "DROP EVERYTHING",   "the image needs 9 slots" },
+    { 58,  7, 0,       "9 SLOTS",           "3 left - exactly boot.exe" },
+    /* ★ 여기 boot.exe 만 teaches 를 안 붙인다. 이건 사용법이 아니라 결말이다 */
+    { 79, 10, "1",     "boot.exe",          "all you started with" },
+    { 92, 12, 0,       "DRIVE SLOT",        "take it out" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════ */
@@ -648,7 +687,7 @@ const Level LEVELS[] = {
       L02_TERM, (int)(sizeof(L02_TERM)/sizeof(L02_TERM[0])),
       L02_HINT, (int)(sizeof(L02_HINT)/sizeof(L02_HINT[0])),
       0, AB(AB_BOOT) | AB(AB_DASH),
-      60, 2, 15,  57, 12,  54, 12,  22.0f },
+      72, 2, 15,  68, 12,  65, 12,  22.0f },
 
     { "s03", "SECTOR 03", "LETTER.TXT", "never sent", 4096,
       L03_BOX,  (int)(sizeof(L03_BOX) /sizeof(L03_BOX[0])),
@@ -662,14 +701,14 @@ const Level LEVELS[] = {
       L04_TERM, (int)(sizeof(L04_TERM)/sizeof(L04_TERM[0])),
       L04_HINT, (int)(sizeof(L04_HINT)/sizeof(L04_HINT[0])),
       0, AB(AB_GLIDE),
-      72, 2, 4,  68, 16,  65, 16,  26.0f },
+      86, 2, 4,  82, 16,  79, 16,  26.0f },
 
     { "s05", "SECTOR 05", "PHOTO.PCX", "scanned from paper", 24576,
       L05_BOX,  (int)(sizeof(L05_BOX) /sizeof(L05_BOX[0])),
       L05_TERM, (int)(sizeof(L05_TERM)/sizeof(L05_TERM[0])),
       L05_HINT, (int)(sizeof(L05_HINT)/sizeof(L05_HINT[0])),
       AB(AB_GRIP), AB(AB_DASH) | AB(AB_GLIDE),
-      76, 2, 8,  71, 12,  68, 12,  32.0f },
+      84, 2, 8,  79, 12,  76, 12,  32.0f },
 
     { "s06", "SECTOR 06", "DIARY.TXT", "entries stop in march", 8192,
       L06_BOX,  (int)(sizeof(L06_BOX) /sizeof(L06_BOX[0])),
@@ -698,8 +737,8 @@ const Level LEVELS[] = {
       L09_BOX,  (int)(sizeof(L09_BOX) /sizeof(L09_BOX[0])),
       L09_TERM, (int)(sizeof(L09_TERM)/sizeof(L09_TERM[0])),
       L09_HINT, (int)(sizeof(L09_HINT)/sizeof(L09_HINT[0])),
-      0, AB(AB_JUMP2) | AB(AB_DASH),
-      68, 2, 15,  65, 6,  62, 6,  30.0f },
+      0, AB(AB_BOOT) | AB(AB_JUMP2) | AB(AB_DASH),
+      76, 2, 15,  73, 6,  71, 6,  30.0f },
 
     { "s10", "SECTOR 10", "README.1ST", "read me first", 2048,
       L10_BOX,  (int)(sizeof(L10_BOX) /sizeof(L10_BOX[0])),
@@ -776,8 +815,19 @@ const Level LEVELS[] = {
       L20_BOX,  (int)(sizeof(L20_BOX) /sizeof(L20_BOX[0])),
       L20_TERM, (int)(sizeof(L20_TERM)/sizeof(L20_TERM[0])),
       L20_HINT, (int)(sizeof(L20_HINT)/sizeof(L20_HINT[0])),
-      0, AB(AB_DASH) | AB(AB_JUMP2),
-      90, 2, 15,  86, 14,  55, 14,  40.0f,  9 },
+      0, AB(AB_BOOT) | AB(AB_DASH) | AB(AB_JUMP2),
+      96, 2, 15,  92, 14,  58, 10,  40.0f,  9 },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));
+
+/* 능력을 보상으로 준 스테이지의 **다음**이 그 능력의 교실이다.
+ * boot 는 아무도 안 주므로(처음부터 갖고 있다) s01 이 교실이 된다. */
+int hint_school_level(unsigned ability)
+{
+    if (ability & AB(AB_BOOT)) return 0;
+    for (int i = 0; i < LEVEL_COUNT; i++)
+        if (LEVELS[i].reward & ability)
+            return (i + 1 < LEVEL_COUNT) ? i + 1 : i;
+    return -1;
+}
