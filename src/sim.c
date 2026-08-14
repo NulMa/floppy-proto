@@ -238,7 +238,7 @@ static void move_y(World *w, float dy)
         float s = (remain > 1.0f) ? 1.0f : remain;
         float ny = p->y + step * s;
         if (hits_solid(w, p->x, ny) || oneway_blocks(w, p->x, p->y, ny)) {
-            if (dy > 0) { if (!p->onGround) w->evLand = 1; p->onGround = 1; }
+            if (dy > 0) p->onGround = 1;
             p->vy = 0;
             return;
         }
@@ -388,10 +388,19 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         if (p->vy > cap) p->vy = cap;
     }
 
+    /* ★ 착지는 **상태 변화**로 판정한다.
+     *
+     * onGround 를 매 프레임 0 으로 리셋한 뒤 충돌 안에서 "!onGround 면 착지"로
+     * 판정하면, 가만히 서 있어도 매 프레임 착지가 된다 (초당 60번).
+     * 소리를 붙이고 나서야 드러났다 — 서 있으면 착지음이 계속 나고
+     * 점프하면(공중이라) 뚝 끊겼다. */
+    int wasOnGround = p->onGround;
+
     p->onGround = 0;
     move_x(w, p->vx * dt);
     move_y(w, p->vy * dt);
     if (!p->onGround && hits_solid(w, p->x, p->y + 1.0f)) p->onGround = 1;
+    if (p->onGround && !wasOnGround) w->evLand = 1;
     if (p->onGround) {
         p->dashUsed = 0;
         p->airJumps = p->has[AB_JUMP2] ? 1 : 0;

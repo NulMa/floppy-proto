@@ -5,6 +5,7 @@
 #include "sim.h"
 #include "progress.h"
 #include "sfx.h"
+#include "bgm.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -672,6 +673,7 @@ int main(int argc, char **argv)
     SetWindowPosition(60, 60);
 
     sfx_init();
+    bgm_init();   /* 오디오 장치를 sfx 와 공유한다. 순서가 바뀌면 안 된다 */
 
     RenderTexture2D canvas = LoadRenderTexture(VIEW_W, VIEW_H);
     SetTextureFilter(canvas.texture, TEXTURE_FILTER_POINT);
@@ -686,7 +688,14 @@ int main(int argc, char **argv)
         float dt = 1.0f / 60.0f;
         int enter = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER);
 
+        bgm_update();   /* 스트림 버퍼가 비면 다음 구간을 합성해 넣는다 */
+
         if (IsKeyPressed(KEY_F5)) { load_tune(&tune, "tune.txt", toast, sizeof(toast)); toastTimer = 2.5f; }
+        if (IsKeyPressed(KEY_M)) {
+            bgm_toggle();
+            snprintf(toast, sizeof(toast), "BGM %s", bgm_enabled() ? "ON" : "OFF");
+            toastTimer = 1.2f;
+        }
         if (toastTimer > 0) toastTimer -= dt;
 
         int esc = IsKeyPressed(KEY_ESCAPE);
@@ -801,6 +810,7 @@ int main(int argc, char **argv)
         if ((shotMode || shotMenu) && ++frames >= shotAt) { TakeScreenshot("shot.png"); break; }
     }
 
+    bgm_shutdown();
     sfx_shutdown();
     UnloadRenderTexture(canvas);
     CloseWindow();

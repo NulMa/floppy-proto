@@ -391,6 +391,51 @@ int main(void)
         check(!masterKey, "단독으로 전 구간을 여는 능력이 없다");
     }
 
+    /* ── 이벤트 ────────────────────────────────────────────────────
+     *
+     * ★ 이 절이 왜 있는가: `evLand` 가 **가만히 서 있어도 매 프레임** 켜졌다.
+     *   onGround 를 매 프레임 0 으로 리셋한 뒤 충돌 안에서 "!onGround 면 착지"로
+     *   판정했기 때문이다. 소리를 붙이기 전에는 아무도 몰랐다 — 화면에는
+     *   아무 표시도 없었으니까. 효과음이 초당 60번 나고 나서야 드러났다.
+     *
+     *   교훈: **이벤트는 아무 데도 안 보여도 틀릴 수 있다.** 세어봐야 한다. */
+    printf("\n== 이벤트 ==\n");
+    {
+        sim_load(&w, &t, 0);
+        Input idle = { 0 };
+        const float dt = 1.0f / 60.0f;
+
+        /* 스폰 직후 낙하·착지가 끝나도록 먼저 돌린다 */
+        for (int f = 0; f < 60; f++) sim_step(&w, &t, &idle, dt);
+
+        int lands = 0, jumps = 0;
+        for (int f = 0; f < 180; f++) {   /* 3초간 가만히 */
+            sim_step(&w, &t, &idle, dt);
+            if (w.evLand) lands++;
+            if (w.evJump) jumps++;
+        }
+        printf("  가만히 3초: 착지 %d회 · 점프 %d회 (기대 0 / 0)\n", lands, jumps);
+        check(lands == 0, "서 있는 동안 착지 이벤트가 안 난다");
+        check(jumps == 0, "서 있는 동안 점프 이벤트가 안 난다");
+        check(w.p.onGround, "서 있는 동안 접지 상태가 유지된다");
+
+        /* 점프 한 번 → 착지 정확히 1회 */
+        Input jump = { 0 };
+        jump.jumpPressed = 1; jump.jumpHeld = 1;
+        sim_step(&w, &t, &jump, dt);
+        check(w.evJump, "점프하면 점프 이벤트가 난다");
+
+        int landsAfter = 0, airborne = 0;
+        for (int f = 0; f < 180; f++) {
+            sim_step(&w, &t, &idle, dt);
+            if (!w.p.onGround) airborne++;
+            if (w.evLand) landsAfter++;
+        }
+        printf("  점프 후 3초: 체공 %d프레임 · 착지 %d회 (기대 >0 / 1)\n", airborne, landsAfter);
+        check(airborne > 0,      "점프하면 실제로 뜬다");
+        check(landsAfter == 1,   "점프 후 착지 이벤트가 정확히 1회");
+    }
+
     printf("\n%s  (%d 실패)\n\n", failures ? "== 실패 ==" : "== 전부 통과 ==", failures);
     return failures ? 1 : 0;
 }
