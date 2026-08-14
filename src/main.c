@@ -351,32 +351,38 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
     Color lc = w->atTerminal ? C_TERM : (Color){ 150, 110, 110, 255 };
     DrawText(lock, VIEW_W - MeasureText(lock, 10) - 6, 17, 10, lc);
 
-    /* 로드아웃 패널 */
-    int nUnlocked = 0;
-    for (int a = 0; a < AB_COUNT; a++) if (sim_ability_unlocked(w, a)) nUnlocked++;
-    int px = 6, py = 36, pw = 152, ph = nUnlocked * 12 + 16;
-    DrawRectangle(px, py, pw, ph, (Color){ 8, 10, 18, w->atTerminal ? 228 : 150 });
-    DrawRectangleLines(px, py, pw, ph, w->atTerminal ? Fade(C_TERM, 0.7f) : (Color){ 34, 40, 60, 255 });
-    DrawText(w->atTerminal ? "UTILITIES" : "UTILITIES  (locked)",
-             px + 5, py + 4, 10, w->atTerminal ? C_TERM : C_OFF);
-    /* ★ 아직 손에 넣은 적 없는 유틸리티는 목록에 아예 안 뜬다.
-     *   존재를 모르는 게 맞다 — 회수한 디스크에서 하나씩 나온다. */
-    int row = 0;
-    for (int a = 0; a < AB_COUNT; a++) {
-        if (!sim_ability_unlocked(w, a)) continue;
-        int ly = py + 17 + row * 12;
-        row++;
-        int on = p->has[a];
-        int here = sim_ability_available(w, a);
-        Color c = on ? AB_COLOR[a] : (w->atTerminal && here ? C_DIM : (Color){ 38, 44, 62, 255 });
-        DrawRectangle(px + 5, ly + 1, 6, 6, on ? AB_COLOR[a] : (Color){ 24, 28, 42, 255 });
-        DrawRectangleLines(px + 5, ly + 1, 6, 6, c);
-        snprintf(buf, sizeof(buf), "%d %-10s %d", a + 1, ABILITY_FILE[a], ABILITY_COST[a]);
-        DrawText(buf, px + 15, ly, 10, c);
-        /* 이 섹터에 없는 유틸리티는 오른쪽에 따로 표기한다.
-         * 같은 좌표에 겹쳐 그리면 둘 다 못 읽는다 */
-        if (w->atTerminal && !here && !on)
-            DrawText("absent", px + pw - 38, ly, 10, (Color){ 96, 62, 70, 255 });
+    /* 로드아웃 패널 — **터미널 위에서만** 그린다.
+     *
+     * 상시로 띄우면 화면 좌상단을 계속 먹는다. 레벨이 위쪽에서 시작하면
+     * 플레이어와 지형이 패널 뒤에 깔린다 (s04 에서 실제로 그랬다).
+     * 장착 상태는 상단 용량 칸의 색으로 이미 보이므로 밖에서는 필요 없다. */
+    int px = 6, pw = 152;
+    if (w->atTerminal) {
+        int nUnlocked = 0;
+        for (int a = 0; a < AB_COUNT; a++) if (sim_ability_unlocked(w, a)) nUnlocked++;
+        int py = 36, ph = nUnlocked * 12 + 16;
+        DrawRectangle(px, py, pw, ph, (Color){ 8, 10, 18, 228 });
+        DrawRectangleLines(px, py, pw, ph, Fade(C_TERM, 0.7f));
+        DrawText("UTILITIES", px + 5, py + 4, 10, C_TERM);
+        /* ★ 아직 손에 넣은 적 없는 유틸리티는 목록에 아예 안 뜬다.
+         *   존재를 모르는 게 맞다 — 회수한 디스크에서 하나씩 나온다. */
+        int row = 0;
+        for (int a = 0; a < AB_COUNT; a++) {
+            if (!sim_ability_unlocked(w, a)) continue;
+            int ly = py + 17 + row * 12;
+            row++;
+            int on = p->has[a];
+            int here = sim_ability_available(w, a);
+            Color c = on ? AB_COLOR[a] : (here ? C_DIM : (Color){ 38, 44, 62, 255 });
+            DrawRectangle(px + 5, ly + 1, 6, 6, on ? AB_COLOR[a] : (Color){ 24, 28, 42, 255 });
+            DrawRectangleLines(px + 5, ly + 1, 6, 6, c);
+            snprintf(buf, sizeof(buf), "%d %-10s %d", a + 1, ABILITY_FILE[a], ABILITY_COST[a]);
+            DrawText(buf, px + 15, ly, 10, c);
+            /* 이 섹터에 없는 유틸리티는 오른쪽에 따로 표기한다.
+             * 같은 좌표에 겹쳐 그리면 둘 다 못 읽는다 */
+            if (!here && !on)
+                DrawText("absent", px + pw - 38, ly, 10, (Color){ 96, 62, 70, 255 });
+        }
     }
 
     /* 조작 안내는 월드에 떠 있는 힌트가 맡는다.
