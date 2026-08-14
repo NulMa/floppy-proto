@@ -303,6 +303,151 @@ static const HintSpec L10_HINT[] = {
     { 69, 13, 0,       "DRIVE SLOT",               0 },
 };
 
+/* ══════════════════════════════════════════════════════════════════════
+ *  11 — NOTES.TXT   [중간]   보상: 없음
+ *
+ *  지면 가시 밭. 가시 폭으로 요구 능력이 갈린다.
+ *    4칸(64px) 맨몸 점프(75px)로 넘어짐 / 5칸(80px) 은 boot(89px) 필요
+ *
+ *  ⚠️ 천장 가시를 구덩이 위에 두면 안 된다. 구덩이는 점프+대시로만 건너는데
+ *    점프하면 천장 가시에 죽는다 = 아무도 못 지나간다. 가시는 지면에만.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L11_BOX[] = {
+    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  1, 15, 21,  3, T_SOLID },
+    {  7, 14,  4,  1, T_SPIKE },      /* 4칸 — 맨몸으로 넘어진다 */
+    { 14, 14,  5,  1, T_SPIKE },      /* 5칸 — boot 필요 */
+    { 22, 17,  6,  1, T_SPIKE },      /* 6칸 구덩이 — 점프+dash */
+    { 28, 15, 13,  3, T_SOLID },
+    { 33, 14,  5,  1, T_SPIKE },
+    { 41, 17,  6,  1, T_SPIKE },
+    { 47, 15, 24,  3, T_SOLID },
+    { 53, 14,  4,  1, T_SPIKE },
+    { 60, 14,  5,  1, T_SPIKE },
+};
+static const TermSpec L11_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 49, 14, 0 } };
+static const HintSpec L11_HINT[] = {
+    {  3, 12, 0,       "SPIKE FIELD",   "width decides what you need" },
+    { 16, 11, "1",     "boot.exe",      "5 tiles is too far bare" },
+    { 24, 11, "SHIFT", "dash.exe",      "for the pits" },
+    { 66, 12, 0,       "NOTES.TXT",     "half a sentence, then nothing" },
+    { 69, 13, 0,       "DRIVE SLOT",    0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  12 — TRACK02.MOD   [중간]   보상: 없음
+ *
+ *  점프패드 릴레이로 올라갔다가, 12칸을 활공으로 내려온다.
+ *
+ *  ★ 패드를 발판 **바로 아래**에 두면 밑면에 부딪힌다.
+ *    한 칸 옆에 두면 포물선으로 발판 위에 올라탄다 (0.478초 상승 = 가로 3.8칸).
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L12_BOX[] = {
+    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  1, 15, 12,  3, T_SOLID },
+    {  9, 15,  1,  1, T_PAD },        /* 발판(x11~) 왼쪽에 둔다 */
+    { 11,  9,  8,  1, T_SOLID },      /* surface row9 */
+    { 16,  9,  1,  1, T_PAD },
+    { 18,  3,  8,  1, T_SOLID },      /* surface row3 */
+    { 26, 17, 15,  1, T_SPIKE },      /* 12칸 하강 · 15칸 구덩이 — 활공 전용 */
+    { 41, 15, 30,  3, T_SOLID },
+};
+static const TermSpec L12_TERM[] = { { 3, 14, 0 }, { 20, 2, 0 }, { 44, 14, 0 } };
+static const HintSpec L12_HINT[] = {
+    {  3, 12, 0,       "JUMP PADS",   "step on, do not aim" },
+    { 12,  7, 0,       "AGAIN",       0 },
+    { 22,  1, "3",     "glide.exe",   "12 tiles down, 15 across" },
+    { 66, 12, 0,       "TRACK02.MOD", "an unfinished loop" },
+    { 69, 13, 0,       "DRIVE SLOT",  0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  13 — SPRITE.PCX   [중간]   보상: 없음
+ *
+ *  원웨이 발판 층. 지면은 19칸짜리 가시밭이라 못 지나간다 —
+ *  아래에서 뚫고 올라가 위층으로 우회하는 게 유일한 길이다.
+ *  층 간격은 3칸이라 boot 로 오른다.
+ *
+ *  ★ 터미널은 원웨이 위에 못 둔다 (발판 위 검사가 T_SOLID 를 본다).
+ *    꼭대기 층 끝을 solid 로 만들어 거기 둔다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L13_BOX[] = {
+    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  1, 15, 70,  3, T_SOLID },
+    { 10, 14, 19,  1, T_SPIKE },      /* 지면은 통과 불가 */
+    {  8, 12, 14,  1, T_ONEWAY },     /* 3칸 위 — 아래에서 뚫고 올라간다 */
+    { 12,  9, 14,  1, T_ONEWAY },
+    { 16,  6, 12,  1, T_ONEWAY },
+    { 28,  6,  4,  1, T_SOLID },      /* 터미널 자리 + 내려가는 발판 */
+};
+static const TermSpec L13_TERM[] = { { 3, 14, 0 }, { 29, 5, 0 }, { 45, 14, 0 } };
+static const HintSpec L13_HINT[] = {
+    {  3, 12, 0,       "THE FLOOR IS OUT",  "go over it" },
+    {  8, 10, 0,       "THIN PLATFORMS",    "jump up through them" },
+    { 29,  3, 0,       "DROP OFF THE END",  0 },
+    { 66, 12, 0,       "SPRITE.PCX",        "16 by 16, four colours" },
+    { 69, 13, 0,       "DRIVE SLOT",        0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  14 — BACKUP.ZIP   [중간]   보상: 없음
+ *
+ *  길다. 터미널이 둘뿐이라 한 번 커밋하면 오래 달린다.
+ *  마지막에 저천장 통로를 두어 점프로 못 빠져나가게 한다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L14_BOX[] = {
+    {  0,  0, 96,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 95,  0,  1, 18, T_SOLID },
+    {  1, 15, 20,  3, T_SOLID },
+    { 21, 17,  6,  1, T_SPIKE },
+    { 27, 15, 14,  3, T_SOLID },
+    { 35, 12,  4,  3, T_SOLID },      /* 3칸 턱 */
+    { 41, 17,  6,  1, T_SPIKE },
+    { 47, 15, 16,  3, T_SOLID },
+    { 52,  0, 16, 13, T_SOLID },      /* 저천장 — 여유 2칸 */
+    { 63, 17,  4,  1, T_SPIKE },      /* 저천장 아래 4칸 구덩이 — dash 전용 */
+    { 67, 15, 28,  3, T_SOLID },
+};
+static const TermSpec L14_TERM[] = { { 3, 14, 0 }, { 50, 14, 0 } };
+static const HintSpec L14_HINT[] = {
+    {  3, 12, 0,       "TWO TERMINALS",     "the second is far" },
+    { 30, 12, "1",     "boot.exe",          "for the step" },
+    { 50, 11, 0,       "LOW CEILING AHEAD", "dash under it" },
+    { 90, 12, 0,       "BACKUP.ZIP",        "everything, once" },
+    { 93, 13, 0,       "DRIVE SLOT",        0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  15 — INVOICE.TXT   [중간]   보상: 없음
+ *
+ *  출구 직전에 굴뚝을 하나 두고 그 꼭대기에 디스크를 놓는다.
+ *  **클리어에는 필요 없지만 챙기려면 파동을 등지고 올라갔다 내려와야 한다.**
+ *  "챙길까 말까"에 처음으로 실제 시간 비용이 붙는 스테이지.
+ *
+ *  ★ 왼쪽으로 되돌아가는 왕복은 안 된다 — 파동이 오른쪽으로 오므로 정면충돌이다.
+ *    "왕복"은 세로 우회로 만든다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L15_BOX[] = {
+    {  0,  0, 88,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 87,  0,  1, 18, T_SOLID },
+    {  1, 15, 22,  3, T_SOLID },
+    { 23, 17,  6,  1, T_SPIKE },
+    { 29, 15, 18,  3, T_SOLID },
+    { 37, 12,  4,  3, T_SOLID },      /* 3칸 턱 */
+    { 47, 17,  6,  1, T_SPIKE },
+    { 53, 15, 22,  3, T_SOLID },
+    { 60, 14,  4,  1, T_SPIKE },
+    { 75, 15, 12,  3, T_SOLID },
+    { 75,  4,  2, 10, T_SOLID },      /* 굴뚝 왼벽 (rows 4~13) — row14 는 통로 */
+    { 80,  4,  2, 10, T_SOLID },      /* 굴뚝 오른벽 */
+};
+static const TermSpec L15_TERM[] = { { 3, 14, 0 }, { 31, 14, 0 }, { 56, 14, 0 } };
+static const HintSpec L15_HINT[] = {
+    {  3, 12, 0,       "THE DISK IS UP A SHAFT", "you do not need it to leave" },
+    { 33, 12, "SHIFT", "dash.exe",               0 },
+    { 70, 12, "4",     "grip.exe",               "if you want the disk" },
+    { 78,  2, 0,       "INVOICE.TXT",            "unpaid" },
+    { 84, 13, 0,       "DRIVE SLOT",             "right past the shaft" },
+};
+
 /* ══════════════════════════════════════════════════════════════════════ */
 
 /* 해금 곡선 — 능력 합계가 12칸을 넘는 순간부터 "무엇을 두고 갈까"가 시작된다.
@@ -385,6 +530,41 @@ const Level LEVELS[] = {
       L10_HINT, (int)(sizeof(L10_HINT)/sizeof(L10_HINT[0])),
       0, AB(AB_DASH),
       72, 2, 15,  69, 14,  66, 14,  48.0f },
+
+    { "s11", "SECTOR 11", "NOTES.TXT", "half a sentence, then nothing", 3072,
+      L11_BOX,  (int)(sizeof(L11_BOX) /sizeof(L11_BOX[0])),
+      L11_TERM, (int)(sizeof(L11_TERM)/sizeof(L11_TERM[0])),
+      L11_HINT, (int)(sizeof(L11_HINT)/sizeof(L11_HINT[0])),
+      0, AB(AB_BOOT) | AB(AB_DASH),
+      72, 2, 15,  69, 14,  66, 14,  38.0f },
+
+    { "s12", "SECTOR 12", "TRACK02.MOD", "an unfinished loop", 45056,
+      L12_BOX,  (int)(sizeof(L12_BOX) /sizeof(L12_BOX[0])),
+      L12_TERM, (int)(sizeof(L12_TERM)/sizeof(L12_TERM[0])),
+      L12_HINT, (int)(sizeof(L12_HINT)/sizeof(L12_HINT[0])),
+      0, AB(AB_GLIDE),
+      72, 2, 15,  69, 14,  66, 14,  38.0f },
+
+    { "s13", "SECTOR 13", "SPRITE.PCX", "16 by 16, four colours", 6144,
+      L13_BOX,  (int)(sizeof(L13_BOX) /sizeof(L13_BOX[0])),
+      L13_TERM, (int)(sizeof(L13_TERM)/sizeof(L13_TERM[0])),
+      L13_HINT, (int)(sizeof(L13_HINT)/sizeof(L13_HINT[0])),
+      0, AB(AB_BOOT),
+      72, 2, 15,  69, 14,  66, 14,  38.0f },
+
+    { "s14", "SECTOR 14", "BACKUP.ZIP", "everything, once", 131072,
+      L14_BOX,  (int)(sizeof(L14_BOX) /sizeof(L14_BOX[0])),
+      L14_TERM, (int)(sizeof(L14_TERM)/sizeof(L14_TERM[0])),
+      L14_HINT, (int)(sizeof(L14_HINT)/sizeof(L14_HINT[0])),
+      0, AB(AB_BOOT) | AB(AB_DASH),
+      96, 2, 15,  93, 14,  90, 14,  40.0f },
+
+    { "s15", "SECTOR 15", "INVOICE.TXT", "unpaid", 2560,
+      L15_BOX,  (int)(sizeof(L15_BOX) /sizeof(L15_BOX[0])),
+      L15_TERM, (int)(sizeof(L15_TERM)/sizeof(L15_TERM[0])),
+      L15_HINT, (int)(sizeof(L15_HINT)/sizeof(L15_HINT[0])),
+      0, AB(AB_DASH),
+      88, 2, 15,  84, 14,  78, 4,  42.0f },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));
