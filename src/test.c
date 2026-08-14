@@ -184,6 +184,64 @@ int main(void)
         check(L->formatSpeed * t.formatScale < t.maxSpeed * 0.5f, label);
     }
 
+    /* ── 밸런스: 파동 압박 ──
+     *
+     * 세로 이동 중에는 가로 진행이 0인데 파동은 계속 다가온다.
+     * 굴뚝을 오르는 동안 파동이 따라잡으면 그 스테이지는 클리어가 불가능해진다.
+     *
+     *   정지 허용 시간 = formatLead / formatSpeed
+     *   등반 시간      ≈ 세로 스팬 / 58px/s   (벽점프 1회 약 35px, 왕복 0.6초)
+     *
+     * 여유가 1.5배는 있어야 사람이 실수 한 번 하고도 올라간다. */
+    printf("\n== 파동 압박 ==\n");
+    printf("  %-14s %-6s %-8s %-8s %-8s %s\n", "레벨", "파동", "정지허용", "세로스팬", "등반추정", "여유");
+    for (int i = 0; i < LEVEL_COUNT; i++) {
+        memset(&w, 0, sizeof(w));
+        sim_load(&w, &t, i);
+        const Level *L = sim_level(&w);
+
+        int lo = MAP_H, hi = -1;
+        for (int c = 1; c < L->width - 1; c++) {
+            int s = surface_row(&w, c);
+            if (s < 0) continue;
+            if (s < lo) lo = s;
+            if (s > hi) hi = s;
+        }
+        float span    = (hi > lo) ? (float)(hi - lo) * TILE : 0.0f;
+        float stall   = t.formatLead / (L->formatSpeed * t.formatScale);
+        float climb   = span / 58.0f;
+        float margin  = (climb > 0.05f) ? stall / climb : 99.0f;
+
+        printf("  %-14s %4.0f  %6.1fs  %5.0fpx  %6.1fs  %5.1fx%s\n",
+               L->file, L->formatSpeed, stall, span, climb, margin,
+               margin < 1.5f ? "   <- 빠듯하다" : "");
+
+        snprintf(label, sizeof(label), "%s: 등반 중에 파동에 잡히지 않는다", L->id);
+        check(margin >= 1.5f, label);
+    }
+
+    /* ── 밸런스: 티어 간 난이도 곡선 ──
+     * 티어가 올라가면 평균 파동 속도도 올라가야 한다. 한 스테이지가 튀면
+     * 그 뒤가 오히려 쉬워 보인다 (s10 이 48 이라 어려운 티어보다 빨랐다). */
+    printf("\n== 티어별 난이도 ==\n");
+    {
+        float sum[3] = { 0, 0, 0 }, mx[3] = { 0, 0, 0 };
+        int   n[3] = { 0, 0, 0 };
+        for (int i = 0; i < LEVEL_COUNT; i++) {
+            int tier = (i < 5) ? 0 : (i < 15 ? 1 : 2);
+            sum[tier] += LEVELS[i].formatSpeed;
+            if (LEVELS[i].formatSpeed > mx[tier]) mx[tier] = LEVELS[i].formatSpeed;
+            n[tier]++;
+        }
+        const char *tn[3] = { "EASY  ", "MEDIUM", "HARD  " };
+        for (int k = 0; k < 3; k++)
+            if (n[k]) printf("  %s  %d개  평균 %.0fpx/s  최대 %.0f\n", tn[k], n[k], sum[k] / n[k], mx[k]);
+        if (n[0] && n[1] && n[2]) {
+            check(sum[0] / n[0] < sum[1] / n[1], "쉬움 < 중간 (평균 파동 속도)");
+            check(sum[1] / n[1] < sum[2] / n[2], "중간 < 어려움 (평균 파동 속도)");
+        }
+    }
+
     /* ── 01 튜토리얼: 관문이 실제로 그 능력을 요구하는가 ── */
     printf("\n== 01 튜토리얼 ==\n");
     memset(&w, 0, sizeof(w));

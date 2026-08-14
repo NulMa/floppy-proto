@@ -495,7 +495,9 @@ static const Box L17_BOX[] = {
     { 58, 17, 11,  1, T_SPIKE },
     { 69, 15, 10,  3, T_SOLID },
 };
-static const TermSpec L17_TERM[] = { { 3, 14, 0 }, { 24, 3, 0 }, { 46, 14, 0 }, { 56, 2, 0 } };
+/* 굴뚝 바로 앞에 터미널을 둔다 — 올라가는 동안 파동이 계속 다가오므로
+ * 등반 직전에 파동을 뒤로 물려주지 않으면 잡힌다. */
+static const TermSpec L17_TERM[] = { { 3, 14, 0 }, { 11, 14, 0 }, { 24, 3, 0 }, { 46, 14, 0 }, { 56, 2, 0 } };
 static const HintSpec L17_HINT[] = {
     {  3, 12, 0,       "TWO SHAFTS",  "nothing but spikes below" },
     { 16, 12, "4",     "grip.exe",    "zigzag between the walls" },
@@ -688,7 +690,7 @@ const Level LEVELS[] = {
       L10_TERM, (int)(sizeof(L10_TERM)/sizeof(L10_TERM[0])),
       L10_HINT, (int)(sizeof(L10_HINT)/sizeof(L10_HINT[0])),
       0, AB(AB_DASH),
-      72, 2, 15,  69, 14,  66, 14,  48.0f },
+      72, 2, 15,  69, 14,  66, 14,  40.0f },   /* 속도 스테이지지만 48 은 어려운 티어보다 빨랐다 */
 
     { "s11", "SECTOR 11", "NOTES.TXT", "half a sentence, then nothing", 3072,
       L11_BOX,  (int)(sizeof(L11_BOX) /sizeof(L11_BOX[0])),
@@ -709,21 +711,21 @@ const Level LEVELS[] = {
       L13_TERM, (int)(sizeof(L13_TERM)/sizeof(L13_TERM[0])),
       L13_HINT, (int)(sizeof(L13_HINT)/sizeof(L13_HINT[0])),
       0, AB(AB_BOOT),
-      72, 2, 15,  69, 14,  66, 14,  38.0f },
+      72, 2, 15,  69, 14,  66, 14,  40.0f },
 
     { "s14", "SECTOR 14", "BACKUP.ZIP", "everything, once", 131072,
       L14_BOX,  (int)(sizeof(L14_BOX) /sizeof(L14_BOX[0])),
       L14_TERM, (int)(sizeof(L14_TERM)/sizeof(L14_TERM[0])),
       L14_HINT, (int)(sizeof(L14_HINT)/sizeof(L14_HINT[0])),
       0, AB(AB_BOOT) | AB(AB_DASH),
-      96, 2, 15,  93, 14,  90, 14,  40.0f },
+      96, 2, 15,  93, 14,  90, 14,  42.0f },
 
     { "s15", "SECTOR 15", "INVOICE.TXT", "unpaid", 2560,
       L15_BOX,  (int)(sizeof(L15_BOX) /sizeof(L15_BOX[0])),
       L15_TERM, (int)(sizeof(L15_TERM)/sizeof(L15_TERM[0])),
       L15_HINT, (int)(sizeof(L15_HINT)/sizeof(L15_HINT[0])),
       0, AB(AB_DASH),
-      88, 2, 15,  84, 14,  78, 4,  42.0f },
+      88, 2, 15,  84, 14,  78, 4,  44.0f },
 
     { "s16", "SECTOR 16", "CRASH.LOG", "the last thing it wrote", 16384,
       L16_BOX,  (int)(sizeof(L16_BOX) /sizeof(L16_BOX[0])),
@@ -744,7 +746,7 @@ const Level LEVELS[] = {
       L18_TERM, (int)(sizeof(L18_TERM)/sizeof(L18_TERM[0])),
       L18_HINT, (int)(sizeof(L18_HINT)/sizeof(L18_HINT[0])),
       0, AB(AB_DASH) | AB(AB_GRIP) | AB(AB_GLIDE),
-      96, 2, 15,  93, 14,  90, 14,  44.0f },
+      96, 2, 15,  93, 14,  90, 14,  46.0f },
 
     { "s19", "SECTOR 19", "GOODBYE.TXT", "one line, unfinished", 1024,
       L19_BOX,  (int)(sizeof(L19_BOX) /sizeof(L19_BOX[0])),
@@ -759,7 +761,7 @@ const Level LEVELS[] = {
       L20_TERM, (int)(sizeof(L20_TERM)/sizeof(L20_TERM[0])),
       L20_HINT, (int)(sizeof(L20_HINT)/sizeof(L20_HINT[0])),
       0, AB(AB_DASH) | AB(AB_JUMP2),
-      90, 2, 15,  86, 14,  55, 14,  44.0f,  9 },
+      90, 2, 15,  86, 14,  55, 14,  46.0f,  9 },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));
