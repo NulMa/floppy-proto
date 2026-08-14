@@ -26,9 +26,13 @@ static const Box S00_BOXES[] = {
 
     {  1, 15, 14,  3, T_SOLID },      /* 바닥 A  x1~14 */
     { 10, 14,  2,  1, T_SOLID },      /* 1칸 계단 — 맨몸으로 넘어진다 */
-    /* 구덩이 x15~16 (2칸 = 32px) — 맨몸 점프(75px)로 여유 있게 건넌다 */
+    { 15, 17,  2,  1, T_SPIKE },      /* 구덩이 바닥의 가시 — 떨어지면 죽는다는 걸 보이게 */
     { 17, 15, 28,  3, T_SOLID },      /* 바닥 B  x17~44 */
     { 19, 12,  4,  6, T_SOLID },      /* 3칸 턱 (48px) — boot 없이는 못 넘는다 */
+
+    /* 턱을 넘은 뒤의 놀이터 — 출구까지 가는 길에 문법 두 개를 보여준다 */
+    { 28, 14,  2,  1, T_SPIKE },      /* 지면 위 가시. 뛰어넘어야 한다 (2칸이라 맨몸으로 됨) */
+    { 38, 15,  1,  1, T_PAD },        /* 점프패드 — 밟으면 6.4칸 튕겨 오른다 */
 };
 
 static const TermSpec S00_TERMS[] = {
@@ -45,10 +49,14 @@ static const HintSpec S00_HINTS[] = {
     {  5, 10, 3, 0,       "TERMINAL",          "the format stops here" },
     {  9, 14, 3, "SPACE", "JUMP",              "hold longer to go higher" },
     { 12, 10, 3, 0,       "FORMAT IS COMING",  "keep moving right" },
-    { 15, 14, 3, "SPACE", "JUMP ACROSS",       0 },
-    { 17, 10, 3, "5",     "LOAD boot.exe",     "you cannot climb without it" },
+    { 15, 14, 3, "SPACE", "JUMP ACROSS",       "spikes below" },
+    { 17, 10, 3, "1",     "LOAD boot.exe",     "you cannot climb without it" },
     { 21,  8, 4, 0,       "3 TILES UP",        "a bare jump reaches 2" },
-    { 42, 13, 5, 0,       "AUTOEXEC.BAT",      "the file this machine read first" },
+    { 28, 11, 3, 0,       "SPIKES",            "jump over them" },
+    { 34, 13, 3, 0,       "JUMP PAD",          "it throws you up" },
+    /* 디스크(38,10) 위로 박스가 덮이지 않게 오른쪽 위로 비켜둔다 */
+    { 42,  7, 4, 0,       "AUTOEXEC.BAT",      "optional - it holds a utility" },
+    { 42, 13, 4, 0,       "DRIVE SLOT",        "this is the way out" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -83,6 +91,8 @@ static const Box S01_BOXES[] = {
     { 32, 15,  7,  3, T_SOLID },
     { 45, 15,  6,  3, T_SOLID },      /* 구덩이 x39~44 */
     { 57, 15,  5,  3, T_SOLID },      /* 구덩이 x51~56 */
+    { 39, 17,  6,  1, T_SPIKE },      /* 구덩이 바닥 — 떨어지면 죽는다는 걸 보이게 */
+    { 51, 17,  6,  1, T_SPIKE },
 
     /* 구간 3 — 위층 아랫면이 row12 여야 맨몸 점프로 벽면을 잡을 수 있다.
      * row10 까지만 내려오면 grip 루트가 통째로 막힌다 (실제로 한 번 그렇게 만들었다) */
@@ -99,11 +109,11 @@ static const TermSpec S01_TERMS[] = {
 };
 
 static const HintSpec S01_HINTS[] = {
-    {  2, 13, 4, "1-5",   "TWO UTILITIES NOW", "swap them at any terminal" },
-    { 13, 11, 3, 0,       "boot.exe",          "gets you up here" },
-    { 29, 13, 4, "SHIFT", "dash.exe",          "gets you across" },
-    { 58, 13, 4, 0,       "LOW CEILING AHEAD", "jumping will not help there" },
-    { 93, 15, 5, 0,       "SAVE01.DAT",        "someone did not finish this" },
+    {  2, 12, 4, "1 2",   "TWO UTILITIES NOW", "swap them at any terminal" },
+    { 13, 10, 3, 0,       "boot.exe",          "gets you up here" },
+    { 29, 12, 4, "SHIFT", "dash.exe",          "gets you across" },
+    { 58, 12, 4, 0,       "LOW CEILING AHEAD", "jumping will not help there" },
+    { 90, 14, 4, 0,       "SAVE01.DAT",        "someone did not finish this" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════ */
@@ -123,7 +133,10 @@ const Level LEVELS[] = {
         S00_TERMS, (int)(sizeof(S00_TERMS) / sizeof(S00_TERMS[0])),
         S00_HINTS, (int)(sizeof(S00_HINTS) / sizeof(S00_HINTS[0])),
         AB(AB_DASH),
-        46, 2, 15, 42, 14, 22.0f,
+        46, 2, 15,          /* width, spawn */
+        42, 14,             /* 출구 = 드라이브 슬롯 */
+        38, 10,             /* 디스크 — 점프패드로 지나가며 줍는다 */
+        22.0f,
     },
     {
         "s01", "SECTOR 01", "SAVE01.DAT", "last saved 1998-04-11", 73728,
@@ -131,7 +144,10 @@ const Level LEVELS[] = {
         S01_TERMS, (int)(sizeof(S01_TERMS) / sizeof(S01_TERMS[0])),
         S01_HINTS, (int)(sizeof(S01_HINTS) / sizeof(S01_HINTS[0])),
         AB(AB_GLIDE),
-        96, 2, 15, 93, 16, 34.0f,
+        96, 2, 15,          /* width, spawn */
+        93, 16,             /* 출구 */
+        90, 16,             /* 디스크 — 출구 바로 앞 */
+        34.0f,
     },
 };
 

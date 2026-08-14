@@ -112,23 +112,40 @@ int main(void)
         const Level *L = sim_level(&w);
         char label[128];
 
-        int goals = 0, terms = 0;
+        int exits = 0, disks = 0, terms = 0, spikes = 0, pads = 0;
         for (int r = 0; r < MAP_H; r++)
             for (int c = 0; c < MAP_W; c++) {
-                if (w.map[r][c] == T_GOAL)     goals++;
+                if (w.map[r][c] == T_EXIT)     exits++;
+                if (w.map[r][c] == T_DISK)     disks++;
                 if (w.map[r][c] == T_TERMINAL) terms++;
+                if (w.map[r][c] == T_SPIKE)    spikes++;
+                if (w.map[r][c] == T_PAD)      pads++;
             }
-        printf("  [%s] %-10s %-14s width %2d  terms %d  hints %d  format %.0fpx/s\n",
-               L->id, L->sector, L->file, L->width, terms, L->hintCount, L->formatSpeed);
+        printf("  [%s] %-10s %-14s w%2d  term %d  hint %d  spike %2d  pad %d  disk %d  %.0fpx/s\n",
+               L->id, L->sector, L->file, L->width, terms, L->hintCount,
+               spikes, pads, disks, L->formatSpeed);
 
-        snprintf(label, sizeof(label), "%s: 목표 1개", L->id);
-        check(goals == 1, label);
+        snprintf(label, sizeof(label), "%s: 출구가 정확히 1개", L->id);
+        check(exits == 1, label);
+        snprintf(label, sizeof(label), "%s: 디스크는 0개 또는 1개", L->id);
+        check(disks == (L->diskCol >= 0 ? 1 : 0), label);
         snprintf(label, sizeof(label), "%s: 터미널이 1개 이상", L->id);
         check(terms >= 1, label);
         snprintf(label, sizeof(label), "%s: 스폰 아래에 바닥이 있다", L->id);
         check(surface_row(&w, L->spawnCol) == L->spawnRow, label);
-        snprintf(label, sizeof(label), "%s: 목표가 레벨 폭 안에 있다", L->id);
-        check(L->goalCol < L->width, label);
+        snprintf(label, sizeof(label), "%s: 출구가 레벨 폭 안에 있다", L->id);
+        check(L->exitCol < L->width, label);
+
+        /* 보상이 걸린 스테이지에 디스크가 없으면 그 능력을 영영 못 얻는다 */
+        snprintf(label, sizeof(label), "%s: 보상이 있으면 디스크도 있다", L->id);
+        check(L->reward == 0 || L->diskCol >= 0, label);
+
+        /* 디스크는 출구 근처에 둔다 — 클리어 직전에 챙길지 말지 정하게 */
+        if (L->diskCol >= 0) {
+            int dx = L->diskCol - L->exitCol; if (dx < 0) dx = -dx;
+            snprintf(label, sizeof(label), "%s: 디스크가 출구 근처(<=8칸)에 있다", L->id);
+            check(dx <= 8, label);
+        }
         snprintf(label, sizeof(label), "%s: 시작 로드아웃 없이도 파동보다 빠르다", L->id);
         check(L->formatSpeed * t.formatScale < t.maxSpeed * 0.5f, label);
 
@@ -164,6 +181,7 @@ int main(void)
         for (int a = 0; a < AB_COUNT; a++) if (unl & AB_BIT(a)) finalCost += ABILITY_COST[a];
         printf("  최종 해금 %d칸 / 용량 %d칸\n", finalCost, CAP_SLOTS);
         check((unl & AB_BIT(AB_BOOT)) != 0, "boot 는 처음부터 있다");
+        check(AB_BOOT == 0, "키 1번이 첫 능력(boot)이다 — 획득 순서 = 키 순서");
         check(finalCost > CAP_SLOTS || LEVEL_COUNT < 4,
               "최종적으로는 전부 못 들고 간다 (레벨이 다 만들어졌다면)");
     }
@@ -231,7 +249,7 @@ int main(void)
         check(faceReach <= R.baseH, "구간3: 맨몸 점프로 벽면에 손이 닿는다 (grip 루트 성립)");
         check(s3gap  > R.lowCeilD, "구간3: 저천장 통로는 점프로 못 건넌다");
 
-        const char *names[AB_COUNT] = { "jump2", "dash", "glide", "grip", "boot" };
+        /* 라벨을 따로 두면 열거형을 재정렬했을 때 이름표만 어긋난다. 실제로 한 번 그랬다. */
         int masterKey = 0;
         printf("\n  단독 통과 판정\n");
         for (int a = 0; a < AB_COUNT; a++) {
@@ -248,7 +266,7 @@ int main(void)
             float corr = (a == AB_DASH) ? R.dashD : (glides ? R.lowCeilD * 1.6f : R.lowCeilD);
             int s3 = (corr >= s3gap) || wall;
 
-            printf("    %-6s  1:%s 2:%s 3:%s%s\n", names[a],
+            printf("    [%d] %-10s  1:%s 2:%s 3:%s%s\n", a + 1, ABILITY_FILE[a],
                    s1 ? "O" : "X", s2 ? "O" : "X", s3 ? "O" : "X",
                    (s1 && s2 && s3) ? "   <- 마스터키" : "");
             if (s1 && s2 && s3) masterKey = 1;

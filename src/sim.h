@@ -20,10 +20,22 @@
 #define TOTAL_BYTES 1474560
 #define BYTES_PER_SLOT (TOTAL_BYTES / CAP_SLOTS)
 
-typedef enum { T_EMPTY = 0, T_SOLID, T_GOAL, T_TERMINAL } Tile;
+typedef enum {
+    T_EMPTY = 0,
+    T_SOLID,          /* 벽 */
+    T_ONEWAY,         /* 아래에서 뚫고 올라가고, 위에서는 밟힌다 */
+    T_PAD,            /* 점프패드 — 밟으면 튕겨 올린다 */
+    T_SPIKE,          /* 가시 — 닿으면 죽는다 */
+    T_TERMINAL,       /* 로드아웃 교체 + 체크포인트 + 파동 정지 */
+    T_DISK,           /* 회수 대상. 없는 스테이지도 있다 */
+    T_EXIT            /* 드라이브 슬롯 — 여기 닿으면 클리어 */
+} Tile;
 typedef enum { ST_PLAY = 0, ST_WON } State;
 
-typedef enum { AB_JUMP2 = 0, AB_DASH, AB_GLIDE, AB_GRIP, AB_BOOT, AB_COUNT } Ability;
+/* ★ 순서 = 획득 순서 = 키 번호.
+ *   1 boot / 2 dash / 3 glide / 4 grip / 5 jump2
+ *   해금 순서와 키가 어긋나면 첫 능력이 5번 키가 되어버린다. */
+typedef enum { AB_BOOT = 0, AB_DASH, AB_GLIDE, AB_GRIP, AB_JUMP2, AB_COUNT } Ability;
 extern const char *const ABILITY_FILE[AB_COUNT];
 extern const int         ABILITY_COST[AB_COUNT];
 
@@ -38,6 +50,7 @@ typedef struct {
     float glideFall;
     float gripSlide, gripJumpX, gripJumpY, gripStick;
     float bootMult;
+    float padVel;             /* 점프패드가 튕겨 올리는 속도 (음수) */
     float formatLead;         /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
     float formatScale;        /* 레벨별 파동 속도에 곱하는 전역 배수 (난이도 조절용) */
 } Tune;
@@ -74,11 +87,13 @@ typedef struct {
     int   atTerminal;
     unsigned avail;        /* 지금 터미널에서 장착 가능한 능력. 0 = 전부 */
     float spawnX, spawnY;
+    int   hasDisk;         /* 이 스테이지의 디스크를 회수했는가 */
 
     /* 안내는 상태를 안 갖는다 — 힌트는 플레이어 위치의 함수라 렌더가 직접 계산한다 */
 
-    int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip, evCheckpoint, evDeath;
-    float denyFlash, checkFlash;
+    int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip;
+    int   evCheckpoint, evDeath, evPad, evDisk;
+    float denyFlash, checkFlash, diskFlash;
 } World;
 
 typedef struct {

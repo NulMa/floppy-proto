@@ -2,10 +2,11 @@
 #include <string.h>
 #include <math.h>
 
+/* 순서 = 획득 순서 = 키 번호 (1~5) */
 const char *const ABILITY_FILE[AB_COUNT] = {
-    "jump2.exe", "dash.exe", "glide.exe", "grip.exe", "boot.exe"
+    "boot.exe", "dash.exe", "glide.exe", "grip.exe", "jump2.exe"
 };
-const int ABILITY_COST[AB_COUNT] = { 5, 4, 4, 4, 3 };
+const int ABILITY_COST[AB_COUNT] = { 3, 4, 4, 4, 5 };
 
 void tune_defaults(Tune *t)
 {
@@ -30,6 +31,7 @@ void tune_defaults(Tune *t)
     t->gripJumpY      = -250.0f;
     t->gripStick      = 0.12f;
     t->bootMult       = 1.20f;
+    t->padVel         = -430.0f;   /* 정점 약 103px = 6.4칸 */
     t->formatLead     = 200.0f;
     t->formatScale    = 1.00f;
 }
@@ -42,7 +44,7 @@ int tune_set(Tune *t, const char *key, float v)
     K(coyoteTime) K(jumpBuffer)
     K(jump2Mult) K(dashSpeed) K(dashTime) K(dashCooldown)
     K(glideFall) K(gripSlide) K(gripJumpX) K(gripJumpY) K(gripStick) K(bootMult)
-    K(formatLead) K(formatScale)
+    K(padVel) K(formatLead) K(formatScale)
 #undef K
     return 0;
 }
@@ -57,13 +59,33 @@ static unsigned char map_at(const World *w, int r, int c)
     return w->map[r][c];
 }
 
+/* 항상 막는 타일. 점프패드도 밟혀야 하므로 여기 들어간다. */
+static int tile_blocks(unsigned char t) { return t == T_SOLID || t == T_PAD; }
+
 static int hits_solid(const World *w, float x, float y)
 {
     int c0 = (int)floorf(x / TILE), c1 = (int)floorf((x + PLAYER_W - 0.01f) / TILE);
     int r0 = (int)floorf(y / TILE), r1 = (int)floorf((y + PLAYER_H - 0.01f) / TILE);
     for (int r = r0; r <= r1; r++)
         for (int c = c0; c <= c1; c++)
-            if (map_at(w, r, c) == T_SOLID) return 1;
+            if (tile_blocks(map_at(w, r, c))) return 1;
+    return 0;
+}
+
+/* 원웨이 발판 — 위에서 내려올 때만 막는다.
+ * 1px 씩 움직이므로 "직전 발끝이 윗면 위에 있었나"로 판정하면 정확히 착지한다. */
+static int oneway_blocks(const World *w, float x, float prevY, float newY)
+{
+    if (newY <= prevY) return 0;                   /* 올라가는 중이면 통과 */
+    float prevBottom = prevY + PLAYER_H;
+    float newBottom  = newY + PLAYER_H;
+    int c0 = (int)floorf(x / TILE), c1 = (int)floorf((x + PLAYER_W - 0.01f) / TILE);
+    int r  = (int)floorf((newBottom - 0.01f) / TILE);
+    for (int c = c0; c <= c1; c++)
+        if (map_at(w, r, c) == T_ONEWAY) {
+            float top = r * (float)TILE;
+            if (prevBottom <= top + 0.5f && newBottom > top) return 1;
+        }
     return 0;
 }
 
@@ -106,9 +128,11 @@ int sim_ability_available(const World *w, int ab)
     return (w->avail & AB_BIT(ab)) != 0;
 }
 
-/* 클리어 보상. 이미 갖고 있던 건 빼고 **새로 얻은 것만** 반환한다 (연출용) */
+/* 클리어 보상. **디스크를 회수했을 때만** 나온다 — 유틸리티는 그 디스크 안에 들어 있었다.
+ * 이미 갖고 있던 건 빼고 새로 얻은 것만 반환한다 (연출용). */
 unsigned sim_grant_reward(World *w)
 {
+    if (!w->hasDisk) return 0;
     unsigned r = sim_level(w)->reward & ~w->unlocked;
     w->unlocked |= r;
     return r;
@@ -142,7 +166,8 @@ void sim_load(World *w, const Tune *t, int levelIndex)
     }
     for (int i = 0; i < L->termCount; i++)
         w->map[L->terms[i].y][L->terms[i].x] = T_TERMINAL;
-    w->map[L->goalRow][L->goalCol] = T_GOAL;
+    w->map[L->exitRow][L->exitCol] = T_EXIT;
+    if (L->diskCol >= 0) w->map[L->diskRow][L->diskCol] = T_DISK;
 
     w->spawnX = L->spawnCol * (float)TILE + 2.0f;
     w->spawnY = L->spawnRow * (float)TILE - PLAYER_H;
@@ -194,14 +219,26 @@ static void move_y(World *w, float dy)
     float step = (dy > 0) ? 1.0f : -1.0f, remain = fabsf(dy);
     while (remain > 0.0f) {
         float s = (remain > 1.0f) ? 1.0f : remain;
-        if (hits_solid(w, p->x, p->y + step * s)) {
+        float ny = p->y + step * s;
+        if (hits_solid(w, p->x, ny) || oneway_blocks(w, p->x, p->y, ny)) {
             if (dy > 0) { if (!p->onGround) w->evLand = 1; p->onGround = 1; }
             p->vy = 0;
             return;
         }
-        p->y += step * s;
+        p->y = ny;
         remain -= s;
     }
+}
+
+/* 발밑에 무엇이 있는가 (착지 판정 직후에 쓴다) */
+static int tile_under(const World *w, unsigned char kind)
+{
+    const Player *p = &w->p;
+    int r = (int)floorf((p->y + PLAYER_H + 1.0f) / TILE);
+    int c0 = (int)floorf(p->x / TILE), c1 = (int)floorf((p->x + PLAYER_W - 0.01f) / TILE);
+    for (int c = c0; c <= c1; c++)
+        if (map_at(w, r, c) == kind) return 1;
+    return 0;
 }
 
 /* ── 한 스텝 ────────────────────────────────────────────────────────── */
@@ -213,8 +250,10 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
 
     w->evJump = w->evDoubleJump = w->evDash = w->evWallJump = 0;
     w->evLand = w->evDeny = w->evEquip = w->evCheckpoint = w->evDeath = 0;
+    w->evPad = w->evDisk = 0;
     if (w->denyFlash  > 0) w->denyFlash  -= dt;
     if (w->checkFlash > 0) w->checkFlash -= dt;
+    if (w->diskFlash  > 0) w->diskFlash  -= dt;
 
     /* 로드아웃 — 터미널 위에서, 그 터미널에 남아 있는 유틸리티만 */
     if (in->toggleAbility >= 0 && in->toggleAbility < AB_COUNT) {
@@ -321,6 +360,15 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
     if (p->onGround) {
         p->dashUsed = 0;
         p->airJumps = p->has[AB_JUMP2] ? 1 : 0;
+
+        /* 점프패드 — 능력 없이도 높이 올려준다. 레벨 문법이지 능력이 아니다. */
+        if (tile_under(w, T_PAD)) {
+            p->vy = t->padVel;
+            p->onGround = 0;
+            p->coyote = 0;
+            p->dashUsed = 0;
+            w->evPad = 1;
+        }
     }
 
     /* ── 터미널 ── */
@@ -343,12 +391,24 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         w->formatX += L->formatSpeed * t->formatScale * dt;
     }
 
-    /* ── 사망 / 클리어 ── */
-    if (p->x < w->formatX || p->y > VIEW_H + TILE) {
+    /* ── 디스크 회수 — 선택이다. 없는 스테이지도 있다 ── */
+    {
+        int dr, dc;
+        if (touches(w, T_DISK, &dr, &dc)) {
+            w->map[dr][dc] = T_EMPTY;
+            w->hasDisk = 1;
+            w->evDisk = 1; w->diskFlash = 1.2f;
+        }
+    }
+
+    /* ── 사망 ── */
+    if (p->x < w->formatX || p->y > VIEW_H + TILE || touches(w, T_SPIKE, 0, 0)) {
         w->deaths++;
         w->evDeath = 1;
         respawn(w, t);
         return;
     }
-    if (touches(w, T_GOAL, 0, 0)) w->state = ST_WON;
+
+    /* ── 클리어는 출구로 한다 ── */
+    if (touches(w, T_EXIT, 0, 0)) w->state = ST_WON;
 }

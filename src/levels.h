@@ -42,7 +42,13 @@ typedef struct {
 
     short width;             /* 이 레벨이 실제로 쓰는 폭 (타일). 카메라 클램프에 쓴다 */
     short spawnCol, spawnRow;
-    short goalCol, goalRow;
+
+    /* 클리어는 **출구**로 한다. 디스크는 그 근처에 놓인 선택 회수물이다.
+     * 디스크 없이 통과만 하는 스테이지도 있어야 하므로 둘을 분리했다.
+     * 디스크가 없는 레벨은 diskCol 을 -1 로 둔다. */
+    short exitCol, exitRow;
+    short diskCol, diskRow;
+
     float formatSpeed;       /* 스테이지별 추격 압력 */
 } Level;
 

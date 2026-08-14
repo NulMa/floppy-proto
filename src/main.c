@@ -20,10 +20,17 @@ static const Color C_DIM     = {  86,  96, 124, 255 };
 static const Color C_OFF     = {  46,  54,  76, 255 };
 static const Color C_FMT     = { 214,  60,  90, 255 };
 
+/* 순서는 sim.h 의 Ability 와 같아야 한다 (= 획득 순서 = 키 번호) */
 static const Color AB_COLOR[AB_COUNT] = {
-    { 118, 200, 255, 255 }, { 255, 150,  80, 255 }, { 170, 230, 150, 255 },
-    { 230, 150, 230, 255 }, { 245, 215, 110, 255 },
+    { 245, 215, 110, 255 },   /* 1 boot  */
+    { 255, 150,  80, 255 },   /* 2 dash  */
+    { 170, 230, 150, 255 },   /* 3 glide */
+    { 230, 150, 230, 255 },   /* 4 grip  */
+    { 118, 200, 255, 255 },   /* 5 jump2 */
 };
+static const Color C_SPIKE = { 224,  92, 108, 255 };
+static const Color C_PAD   = { 250, 196,  86, 255 };
+static const Color C_EXIT  = { 120, 240, 180, 255 };
 
 typedef enum { SCR_TITLE = 0, SCR_PLAY, SCR_CLEAR, SCR_END } Screen;
 
@@ -210,12 +217,46 @@ static void draw_world(const World *w, float t, int camX)
                         DrawRectangle(px + 4, py - TILE + 6 + i * 4, TILE - 8, 2, Fade(C_TERM, pulse));
                     DrawRectangle(px - 2, py + TILE - 2, TILE + 4, 2, C_TERM);
                 } break;
-                case T_GOAL: {
+                case T_DISK: {
                     int bob = ((int)(t * 3) % 2);
                     DrawRectangle(px + 2, py + 2 + bob, TILE - 4, TILE - 4, C_GOAL);
                     DrawRectangle(px + 4, py + 3 + bob, TILE - 8, 3, (Color){ 20, 60, 70, 255 });
                     DrawRectangle(px + 4, py + 9 + bob, TILE - 8, 3, (Color){ 226, 226, 214, 255 });
                 } break;
+
+                case T_EXIT: {
+                    /* 드라이브 슬롯 — 디스크가 들어가는 구멍 */
+                    float pulse = 0.5f + 0.5f * (float)((int)(t * 3) % 2);
+                    DrawRectangle(px, py + 1, TILE, TILE - 2, (Color){ 26, 34, 44, 255 });
+                    DrawRectangleLines(px, py + 1, TILE, TILE - 2, Fade(C_EXIT, pulse));
+                    DrawRectangle(px + 2, py + 6, TILE - 4, 4, (Color){ 6, 8, 14, 255 });
+                    DrawRectangle(px + 3, py + 7, TILE - 6, 2, Fade(C_EXIT, pulse));
+                } break;
+
+                case T_SPIKE: {
+                    /* 위를 향한 삼각 톱니 */
+                    for (int s = 0; s < 4; s++) {
+                        int sx = px + s * 4;
+                        for (int k = 0; k < 4; k++)
+                            DrawRectangle(sx + k, py + TILE - 1 - (k < 2 ? k * 3 : (3 - k) * 3 + 3),
+                                          1, (k < 2 ? k * 3 : (3 - k) * 3 + 3) + 1, C_SPIKE);
+                    }
+                    DrawRectangle(px, py + TILE - 2, TILE, 2, (Color){ 120, 44, 56, 255 });
+                } break;
+
+                case T_PAD: {
+                    int bounce = ((int)(t * 6) % 2) * 2;
+                    DrawRectangle(px, py + 4, TILE, TILE - 4, (Color){ 56, 44, 26, 255 });
+                    DrawRectangle(px, py + 2 - bounce, TILE, 5, C_PAD);
+                    DrawRectangle(px + 3, py + 8, 2, 2, Fade(C_PAD, 0.6f));
+                    DrawRectangle(px + 11, py + 8, 2, 2, Fade(C_PAD, 0.6f));
+                } break;
+
+                case T_ONEWAY:
+                    DrawRectangle(px, py, TILE, 4, C_SOLID_T);
+                    DrawRectangle(px, py + 4, TILE, 1, Fade(C_SOLID, 0.5f));
+                    break;
+
                 default: break;
             }
         }
@@ -299,6 +340,16 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
 
     snprintf(buf, sizeof(buf), "%.1fs  RETRIES %d", w->time, w->deaths);
     DrawText(buf, VIEW_W - MeasureText(buf, 10) - 6, 4, 10, C_DIM);
+
+    /* 이 섹터의 디스크를 챙겼는지 — 출구 앞에서 되돌아갈지 판단하는 정보다 */
+    if (L->diskCol >= 0) {
+        const char *ds = w->hasDisk ? "DISK  [x]" : "DISK  [ ]";
+        DrawText(ds, 6 + CAP_SLOTS * 11 + 12, 17, 10, w->hasDisk ? C_GOAL : C_DIM);
+    }
+    if (w->diskFlash > 0.0f) {
+        snprintf(buf, sizeof(buf), "%s  recovered", L->file);
+        center(buf, 46, 10, Fade(C_GOAL, w->diskFlash));
+    }
     const char *lock = w->atTerminal ? "WRITE PROTECT DISABLED" : "WRITE PROTECTED";
     Color lc = w->atTerminal ? C_TERM : (Color){ 150, 110, 110, 255 };
     DrawText(lock, VIEW_W - MeasureText(lock, 10) - 6, 17, 10, lc);
@@ -371,22 +422,38 @@ static void draw_clear(const World *w, unsigned gained)
 {
     const Level *L = sim_level(w);
     char buf[96], num[32];
-    DrawRectangle(0, 0, VIEW_W, VIEW_H, (Color){ 6, 14, 16, 205 });
-    center("RECOVERED", 62, 20, C_GOAL);
-    commas(L->fileBytes, num, sizeof(num));
-    snprintf(buf, sizeof(buf), "%s        %s bytes", L->file, num);
-    center(buf, 96, 10, C_TEXT);
-    center(L->meta, 112, 10, C_DIM);
+    int hadDisk = (L->diskCol >= 0);
 
-    /* 회수한 디스크 안에 유틸리티가 들어 있었다 */
-    int y = 142;
-    for (int a = 0; a < AB_COUNT; a++) {
-        if (!(gained & AB_BIT(a))) continue;
-        center("the disk contained a utility", y, 10, C_DIM);
-        snprintf(buf, sizeof(buf), "+ %s     %d slots", ABILITY_FILE[a], ABILITY_COST[a]);
-        center(buf, y + 14, 10, AB_COLOR[a]);
-        y += 34;
+    DrawRectangle(0, 0, VIEW_W, VIEW_H, (Color){ 6, 14, 16, 205 });
+    center("SECTOR CLEARED", 56, 20, C_EXIT);
+
+    int y = 92;
+    if (hadDisk && w->hasDisk) {
+        commas(L->fileBytes, num, sizeof(num));
+        snprintf(buf, sizeof(buf), "RECOVERED  %s   %s bytes", L->file, num);
+        center(buf, y, 10, C_GOAL);
+        center(L->meta, y + 14, 10, C_DIM);
+        y += 38;
+        for (int a = 0; a < AB_COUNT; a++) {
+            if (!(gained & AB_BIT(a))) continue;
+            center("the disk contained a utility", y, 10, C_DIM);
+            snprintf(buf, sizeof(buf), "[%d]  + %s     %d slots", a + 1, ABILITY_FILE[a], ABILITY_COST[a]);
+            center(buf, y + 14, 10, AB_COLOR[a]);
+            y += 34;
+        }
+    } else if (hadDisk) {
+        /* 출구만 통과했다. 디스크는 선택이지만, 그 안에 유틸리티가 있었다면 알려준다. */
+        snprintf(buf, sizeof(buf), "%s  LEFT BEHIND", L->file);
+        center(buf, y, 10, (Color){ 220, 130, 110, 255 });
+        if (L->reward)
+            center("it held a utility you did not get", y + 14, 10, C_DIM);
+        center("[R]  go back for it", y + 34, 10, C_TEXT);
+        y += 56;
+    } else {
+        center("no disk on this sector", y, 10, C_DIM);
+        y += 24;
     }
+
     snprintf(buf, sizeof(buf), "%.1f seconds     %d retries", w->time, w->deaths);
     center(buf, y + 4, 10, C_DIM);
     center("[ENTER]  next sector", VIEW_H - 46, 10, C_TEXT);
@@ -467,7 +534,12 @@ int main(int argc, char **argv)
             if (enter) { recovered = 0; bytesSaved = 0; gained = 0;
                          sim_new_game(&world, &tune); screen = SCR_PLAY; }
         } else if (screen == SCR_CLEAR) {
-            if (enter) {
+            /* 디스크를 놓쳤으면 되돌아갈 수 있게 한다 — 진행이 막히면 안 된다 */
+            if (IsKeyPressed(KEY_R)) {
+                sim_load(&world, &tune, world.levelIndex);
+                gained = 0;
+                screen = SCR_PLAY;
+            } else if (enter) {
                 if (world.levelIndex + 1 < LEVEL_COUNT) {
                     sim_load(&world, &tune, world.levelIndex + 1);
                     screen = SCR_PLAY;
@@ -492,8 +564,10 @@ int main(int argc, char **argv)
             sim_step(&world, &tune, &in, dt);
 
             if (world.state == ST_WON) {
-                recovered++;
-                bytesSaved += sim_level(&world)->fileBytes;
+                if (world.hasDisk) {                 /* 디스크를 실제로 주웠을 때만 집계 */
+                    recovered++;
+                    bytesSaved += sim_level(&world)->fileBytes;
+                }
                 gained = sim_grant_reward(&world);   /* 디스크 안에 들어 있던 유틸리티 */
                 screen = SCR_CLEAR;
             }
