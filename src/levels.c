@@ -7,39 +7,40 @@
  *  SECTOR 00 — AUTOEXEC.BAT  (튜토리얼)
  *
  *  가르치는 것은 넷뿐이다. 한 번에 하나씩, 텍스트는 최소로.
- *    ① 이동·점프        평지 + 1칸 계단(맨몸으로 넘어짐)
+ *    ① 이동·점프        평지 + 1칸 계단 + 2칸 구덩이 (전부 맨몸으로 됨)
  *    ② 포맷 파동        느리게 쫓아온다. "오른쪽으로 계속 가라"
  *    ③ 터미널           밟으면 파동이 멈춘다 = 안전. 여기서만 유틸리티를 로드
- *    ④ 능력으로 통과    3칸 턱(맨몸 2.4칸으로 불가) → boot 필요
- *                       6칸 구덩이(boot 로도 불가) → dash 필요
+ *    ④ 능력으로 통과    3칸 턱(맨몸 2.4칸으로 불가) → boot(3.4칸) 필요
  *
- *  "전부 못 들고 간다"는 여기서 안 가르친다. 능력이 2개뿐이라 용량이 안 조인다.
- *  그건 SECTOR 01 이 가르친다. 튜토리얼에 제약을 앞당겨 넣으면 둘 다 흐려진다.
+ *  ★ 여기서 쓸 수 있는 능력은 boot 하나뿐이다.
+ *    나머지는 스테이지 클리어로 하나씩 해금된다. 아직 안 얻은 건 목록에 뜨지도 않는다.
+ *    그래서 튜토리얼은 "고르는 법"이 아니라 "쓰는 법"만 가르친다.
+ *
+ *  ★ 두 번째 터미널을 턱 **바로 앞**에 둔다.
+ *    못 넘고 되돌아가야 하는데 파동이 쫓아오면 첫 경험이 최악이 된다.
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box S00_BOXES[] = {
-    {  0,  0, 52,  1, T_SOLID },      /* 천장 */
+    {  0,  0, 46,  1, T_SOLID },      /* 천장 */
     {  0,  0,  1, 18, T_SOLID },      /* 왼쪽 벽 */
-    { 51,  0,  1, 18, T_SOLID },      /* 오른쪽 벽 */
+    { 45,  0,  1, 18, T_SOLID },      /* 오른쪽 벽 */
 
-    {  1, 15, 27,  3, T_SOLID },      /* 바닥 A */
+    {  1, 15, 14,  3, T_SOLID },      /* 바닥 A  x1~14 */
     { 10, 14,  2,  1, T_SOLID },      /* 1칸 계단 — 맨몸으로 넘어진다 */
-    { 16, 12,  4,  6, T_SOLID },      /* 3칸 턱 (48px) — boot 없이는 못 넘는다 */
-
-    /* 구덩이 x28~33 (6칸 = 96px) — boot(89px)로도 모자라다. dash 필요 */
-    { 34, 15, 17,  3, T_SOLID },      /* 바닥 B */
+    /* 구덩이 x15~16 (2칸 = 32px) — 맨몸 점프(75px)로 여유 있게 건넌다 */
+    { 17, 15, 28,  3, T_SOLID },      /* 바닥 B  x17~44 */
+    { 19, 12,  4,  6, T_SOLID },      /* 3칸 턱 (48px) — boot 없이는 못 넘는다 */
 };
 
 static const TermSpec S00_TERMS[] = {
-    {  5, 14, AB(AB_BOOT) },                    /* 여기엔 boot 만 남아 있다 */
-    { 24, 14, AB(AB_BOOT) | AB(AB_DASH) },      /* dash 가 추가로 있다 */
+    {  5, 14, 0 },      /* 첫 소개용 */
+    { 17, 14, 0 },      /* 턱 바로 앞 — 여기서 boot 를 켜고 넘는다 */
 };
 
 static const MsgSpec S00_MSGS[] = {
     {  1,  4, "ARROWS TO MOVE", "SPACE TO JUMP" },
     {  7,  9, "FORMAT IN PROGRESS", "KEEP MOVING RIGHT" },
-    { 13, 15, "THAT LEDGE IS TOO HIGH", "LOAD A UTILITY AT THE TERMINAL" },
-    { 26, 28, "GAP AHEAD", "A JUMP WILL NOT REACH" },
-    { 44, 46, "AUTOEXEC.BAT", "the file this machine read first" },
+    { 17, 18, "THAT LEDGE IS TOO HIGH", "LOAD boot.exe HERE  [5]" },
+    { 38, 40, "AUTOEXEC.BAT", "the file this machine read first" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -88,26 +89,36 @@ static const TermSpec S01_TERMS[] = {
 };
 
 static const MsgSpec S01_MSGS[] = {
-    {  1,  4, "20 SLOTS OF UTILITIES", "YOU HAVE 12" },
-    { 27, 30, "TWO WAYS PAST EVERY SECTION", "PICK WHAT SUITS YOU" },
-    { 60, 63, "LOW CEILING BELOW", "OR CLIMB OVER THE TOP" },
+    {  1,  4, "TWO UTILITIES NOW", "SWAP THEM AT TERMINALS" },
+    { 27, 30, "BOOT GETS YOU UP", "DASH GETS YOU ACROSS" },
+    { 60, 63, "LOW CEILING BELOW", "JUMPING WILL NOT HELP HERE" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════ */
 
+/* 해금 곡선 — 능력 합계가 12칸을 넘는 시점부터 "무엇을 두고 갈까"가 시작된다.
+ *
+ *   s00 시작   boot                      3칸   여유 9
+ *   s00 클리어 +dash                     7칸   여유 5
+ *   s01 클리어 +glide                   11칸   여유 1
+ *   s02 클리어 +grip                    15칸   ← 여기서 처음 조인다
+ *   s03 클리어 +jump2                   20칸   ← 8칸을 버려야 한다
+ */
 const Level LEVELS[] = {
     {
         "s00", "SECTOR 00", "AUTOEXEC.BAT", "the file this machine read first", 512,
         S00_BOXES, (int)(sizeof(S00_BOXES) / sizeof(S00_BOXES[0])),
         S00_TERMS, (int)(sizeof(S00_TERMS) / sizeof(S00_TERMS[0])),
         S00_MSGS,  (int)(sizeof(S00_MSGS)  / sizeof(S00_MSGS[0])),
-        52, 2, 15, 48, 14, 22.0f,
+        AB(AB_DASH),
+        46, 2, 15, 42, 14, 22.0f,
     },
     {
         "s01", "SECTOR 01", "SAVE01.DAT", "last saved 1998-04-11", 73728,
         S01_BOXES, (int)(sizeof(S01_BOXES) / sizeof(S01_BOXES[0])),
         S01_TERMS, (int)(sizeof(S01_TERMS) / sizeof(S01_TERMS[0])),
         S01_MSGS,  (int)(sizeof(S01_MSGS)  / sizeof(S01_MSGS[0])),
+        AB(AB_GLIDE),
         96, 2, 15, 93, 16, 34.0f,
     },
 };

@@ -25,6 +25,10 @@ typedef struct {
     const TermSpec *terms;  int termCount;
     const MsgSpec  *msgs;   int msgCount;
 
+    /* 이 스테이지를 클리어하면 영구 해금되는 능력 (비트마스크).
+     * 회수한 디스크 안에 그 유틸리티가 들어 있었다는 설정이다. */
+    unsigned reward;
+
     short width;             /* 이 레벨이 실제로 쓰는 폭 (타일). 카메라 클램프에 쓴다 */
     short spawnCol, spawnRow;
     short goalCol, goalRow;

@@ -186,13 +186,20 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
     DrawText(lock, VIEW_W - MeasureText(lock, 10) - 6, 17, 10, lc);
 
     /* 로드아웃 패널 */
-    int px = 6, py = 36, pw = 152, ph = AB_COUNT * 12 + 16;
+    int nUnlocked = 0;
+    for (int a = 0; a < AB_COUNT; a++) if (sim_ability_unlocked(w, a)) nUnlocked++;
+    int px = 6, py = 36, pw = 152, ph = nUnlocked * 12 + 16;
     DrawRectangle(px, py, pw, ph, (Color){ 8, 10, 18, w->atTerminal ? 228 : 150 });
     DrawRectangleLines(px, py, pw, ph, w->atTerminal ? Fade(C_TERM, 0.7f) : (Color){ 34, 40, 60, 255 });
-    DrawText(w->atTerminal ? "UTILITIES  1-5" : "UTILITIES  (locked)",
+    DrawText(w->atTerminal ? "UTILITIES" : "UTILITIES  (locked)",
              px + 5, py + 4, 10, w->atTerminal ? C_TERM : C_OFF);
+    /* ★ 아직 손에 넣은 적 없는 유틸리티는 목록에 아예 안 뜬다.
+     *   존재를 모르는 게 맞다 — 회수한 디스크에서 하나씩 나온다. */
+    int row = 0;
     for (int a = 0; a < AB_COUNT; a++) {
-        int ly = py + 17 + a * 12;
+        if (!sim_ability_unlocked(w, a)) continue;
+        int ly = py + 17 + row * 12;
+        row++;
         int on = p->has[a];
         int here = sim_ability_available(w, a);
         Color c = on ? AB_COLOR[a] : (w->atTerminal && here ? C_DIM : (Color){ 38, 44, 62, 255 });
@@ -206,7 +213,10 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
             DrawText("absent", px + pw - 38, ly, 10, (Color){ 96, 62, 70, 255 });
     }
 
-    const char *keys = "arrows move   space jump   shift dash   R restart   F5 tune";
+    /* 아직 못 얻은 능력의 키는 안내에도 안 뜬다 */
+    const char *keys = sim_ability_unlocked(w, AB_DASH)
+                     ? "arrows move   space jump   shift dash   R restart   F5 tune"
+                     : "arrows move   space jump   R restart   F5 tune";
     DrawRectangle(0, VIEW_H - 13, VIEW_W, 13, (Color){ 8, 10, 18, 200 });
     DrawText(keys, VIEW_W / 2 - MeasureText(keys, 10) / 2, VIEW_H - 11, 10, C_DIM);
 
@@ -252,19 +262,29 @@ static void draw_title(float t)
     center("a floppy has one job left", VIEW_H - 40, 10, (Color){ 60, 68, 92, 255 });
 }
 
-static void draw_clear(const World *w)
+static void draw_clear(const World *w, unsigned gained)
 {
     const Level *L = sim_level(w);
     char buf[96], num[32];
     DrawRectangle(0, 0, VIEW_W, VIEW_H, (Color){ 6, 14, 16, 205 });
-    center("RECOVERED", 78, 20, C_GOAL);
+    center("RECOVERED", 62, 20, C_GOAL);
     commas(L->fileBytes, num, sizeof(num));
     snprintf(buf, sizeof(buf), "%s        %s bytes", L->file, num);
-    center(buf, 112, 10, C_TEXT);
-    center(L->meta, 128, 10, C_DIM);
+    center(buf, 96, 10, C_TEXT);
+    center(L->meta, 112, 10, C_DIM);
+
+    /* 회수한 디스크 안에 유틸리티가 들어 있었다 */
+    int y = 142;
+    for (int a = 0; a < AB_COUNT; a++) {
+        if (!(gained & AB_BIT(a))) continue;
+        center("the disk contained a utility", y, 10, C_DIM);
+        snprintf(buf, sizeof(buf), "+ %s     %d slots", ABILITY_FILE[a], ABILITY_COST[a]);
+        center(buf, y + 14, 10, AB_COLOR[a]);
+        y += 34;
+    }
     snprintf(buf, sizeof(buf), "%.1f seconds     %d retries", w->time, w->deaths);
-    center(buf, 158, 10, C_DIM);
-    center("[ENTER]  next sector", 190, 10, C_TEXT);
+    center(buf, y + 4, 10, C_DIM);
+    center("[ENTER]  next sector", VIEW_H - 46, 10, C_TEXT);
 }
 
 static void draw_end(const World *w, int recovered, long bytes)
@@ -297,12 +317,17 @@ int main(int argc, char **argv)
     load_tune(&tune, "tune.txt", toast, sizeof(toast));
 
     World world;
-    memset(&world, 0, sizeof(world));
-    sim_load(&world, &tune, shotMode ? shotLvl : 0);
+    sim_new_game(&world, &tune);
+    if (shotMode && shotLvl > 0) {
+        /* 스크린샷용: 그 레벨까지의 보상을 미리 지급한다 */
+        for (int i = 0; i < shotLvl && i < LEVEL_COUNT; i++) world.unlocked |= LEVELS[i].reward;
+        sim_load(&world, &tune, shotLvl);
+    }
 
     Screen screen = shotMode ? SCR_PLAY : SCR_TITLE;
     int  recovered = 0;
     long bytesSaved = 0;
+    unsigned gained = 0;
 
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_VSYNC_HINT);
@@ -334,9 +359,8 @@ int main(int argc, char **argv)
         if (toastTimer > 0) toastTimer -= dt;
 
         if (screen == SCR_TITLE) {
-            if (enter) { recovered = 0; bytesSaved = 0; world.deaths = 0;
-                         memset(world.p.has, 0, sizeof(world.p.has));
-                         sim_load(&world, &tune, 0); screen = SCR_PLAY; }
+            if (enter) { recovered = 0; bytesSaved = 0; gained = 0;
+                         sim_new_game(&world, &tune); screen = SCR_PLAY; }
         } else if (screen == SCR_CLEAR) {
             if (enter) {
                 if (world.levelIndex + 1 < LEVEL_COUNT) {
@@ -365,6 +389,7 @@ int main(int argc, char **argv)
             if (world.state == ST_WON) {
                 recovered++;
                 bytesSaved += sim_level(&world)->fileBytes;
+                gained = sim_grant_reward(&world);   /* 디스크 안에 들어 있던 유틸리티 */
                 screen = SCR_CLEAR;
             }
         }
@@ -382,7 +407,7 @@ int main(int argc, char **argv)
             else {
                 draw_world(&world, (float)GetTime(), camX);
                 draw_hud(&world, toast, toastTimer);
-                if (screen == SCR_CLEAR) draw_clear(&world);
+                if (screen == SCR_CLEAR) draw_clear(&world, gained);
             }
         EndTextureMode();
 

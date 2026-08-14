@@ -58,8 +58,13 @@ typedef struct {
     int   has[AB_COUNT];
 } Player;
 
+#define AB_BIT(a)   (1u << (a))
+#define AB_ALL      ((1u << AB_COUNT) - 1u)
+#define AB_STARTING AB_BIT(AB_BOOT)   /* boot.exe 는 처음부터 있다 — 부팅에 쓰던 것 */
+
 typedef struct {
     int    levelIndex;
+    unsigned unlocked;     /* 영구 해금된 능력. 스테이지 클리어로 늘어난다 */
     unsigned char map[MAP_H][MAP_W];
     Player p;
     State  state;
@@ -84,11 +89,14 @@ typedef struct {
     int toggleAbility;   /* -1 = 없음 */
 } Input;
 
-void sim_load(World *w, const Tune *t, int levelIndex);
+void sim_new_game(World *w, const Tune *t);            /* 해금 상태까지 초기화 */
+void sim_load(World *w, const Tune *t, int levelIndex); /* 해금 상태는 유지 */
 void sim_step(World *w, const Tune *t, const Input *in, float dt);
+unsigned sim_grant_reward(World *w);                    /* 클리어 보상 지급. 새로 얻은 것 반환 */
 int  sim_used_slots(const World *w);
 int  sim_free_slots(const World *w);
-int  sim_ability_available(const World *w, int ab);
+int  sim_ability_unlocked(const World *w, int ab);      /* 아예 안 뜨게 할지의 기준 */
+int  sim_ability_available(const World *w, int ab);     /* 지금 이 터미널에서 꺼낼 수 있는가 */
 const Level *sim_level(const World *w);
 
 #endif

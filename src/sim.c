@@ -91,12 +91,28 @@ int sim_used_slots(const World *w)
 }
 int sim_free_slots(const World *w) { return CAP_SLOTS - sim_used_slots(w); }
 
-/* 이 터미널에 그 유틸리티가 남아 있는가. avail 0 이면 전부 있다. */
+/* 아직 손에 넣은 적 없는 유틸리티는 목록에 아예 안 뜬다 */
+int sim_ability_unlocked(const World *w, int ab)
+{
+    return (w->unlocked & AB_BIT(ab)) != 0;
+}
+
+/* 지금 이 터미널에서 꺼낼 수 있는가.
+ * 해금됐고(unlocked) + 이 섹터에 남아 있어야(avail) 한다. avail 0 이면 섹터 제한 없음. */
 int sim_ability_available(const World *w, int ab)
 {
     if (!w->atTerminal) return 0;
+    if (!sim_ability_unlocked(w, ab)) return 0;
     if (w->avail == 0) return 1;
-    return (w->avail & (1u << ab)) != 0;
+    return (w->avail & AB_BIT(ab)) != 0;
+}
+
+/* 클리어 보상. 이미 갖고 있던 건 빼고 **새로 얻은 것만** 반환한다 (연출용) */
+unsigned sim_grant_reward(World *w)
+{
+    unsigned r = sim_level(w)->reward & ~w->unlocked;
+    w->unlocked |= r;
+    return r;
 }
 
 /* ── 로드 ───────────────────────────────────────────────────────────── */
@@ -104,13 +120,19 @@ int sim_ability_available(const World *w, int ab)
 void sim_load(World *w, const Tune *t, int levelIndex)
 {
     int deaths = w->deaths;
+    unsigned unlocked = w->unlocked;
     int has[AB_COUNT];
-    memcpy(has, w->p.has, sizeof(has));   /* 로드아웃은 스테이지를 넘어 유지된다 */
+    memcpy(has, w->p.has, sizeof(has));   /* 로드아웃·해금은 스테이지를 넘어 유지된다 */
 
     memset(w, 0, sizeof(*w));
     w->deaths = deaths;
+    w->unlocked = unlocked;
     memcpy(w->p.has, has, sizeof(has));
     w->levelIndex = levelIndex;
+
+    /* 해금이 풀린 능력이 장착돼 있으면 안 된다 (새 게임 등) */
+    for (int a = 0; a < AB_COUNT; a++)
+        if (w->p.has[a] && !(w->unlocked & AB_BIT(a))) w->p.has[a] = 0;
 
     const Level *L = &LEVELS[levelIndex];
     for (int i = 0; i < L->boxCount; i++) {
@@ -130,6 +152,13 @@ void sim_load(World *w, const Tune *t, int levelIndex)
     w->p.facing = 1;
     w->formatX = w->spawnX - t->formatLead * 2.0f;
     w->state = ST_PLAY;
+}
+
+void sim_new_game(World *w, const Tune *t)
+{
+    memset(w, 0, sizeof(*w));
+    w->unlocked = AB_STARTING;
+    sim_load(w, t, 0);
 }
 
 static void respawn(World *w, const Tune *t)
