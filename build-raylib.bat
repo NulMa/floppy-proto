@@ -8,9 +8,13 @@ set SRC=%ROOT%vendor\raylib-5.5\src
 set OUT=%ROOT%vendor\raylib-mt
 
 if not exist "%SRC%\rcore.c" (
-    echo [ERROR] raylib source not found: %SRC%
+    echo [ERROR] raylib source not found - run fetch-deps.bat first
     exit /b 1
 )
+
+REM ? ?? ??? ???? ?? (OGG/MP3/QOA/MOD).
+REM vendor ? gitignore ? fetch-deps ? ?? ??? ????? ?? ???.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\trim-raylib-audio.ps1" -ConfigPath "%SRC%\config.h"
 
 where cl >nul 2>nul
 if errorlevel 1 (

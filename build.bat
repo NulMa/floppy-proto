@@ -22,7 +22,7 @@ if errorlevel 1 (
 if not exist "%ROOT%build" mkdir "%ROOT%build"
 
 cl /nologo /O2 /Oi /MT /Gy /GS- /W3 /utf-8 -D_CRT_SECURE_NO_WARNINGS /I"%SRC%" ^
-   "%ROOT%src\main.c" "%ROOT%src\sim.c" "%ROOT%src\levels.c" "%ROOT%src\progress.c" ^
+   "%ROOT%src\main.c" "%ROOT%src\sim.c" "%ROOT%src\levels.c" "%ROOT%src\progress.c" "%ROOT%src\sfx.c" ^
    /Fe:"%ROOT%build\floppy.exe" /Fo:"%ROOT%build\\" ^
    /link /OPT:REF /OPT:ICF /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup ^
    "%RLIB%" opengl32.lib gdi32.lib winmm.lib user32.lib shell32.lib

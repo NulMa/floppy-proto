@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include "sim.h"
 #include "progress.h"
+#include "sfx.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -552,7 +553,8 @@ static void draw_clear(const World *w, unsigned gained)
     char buf[96], num[32];
     int hadDisk = (L->diskCol >= 0);
 
-    DrawRectangle(0, 0, VIEW_W, VIEW_H, (Color){ 6, 14, 16, 205 });
+    /* 거의 불투명하게. 205 였을 때 뒤의 지형과 힌트가 비쳐서 글자가 안 읽혔다 */
+    DrawRectangle(0, 0, VIEW_W, VIEW_H, (Color){ 6, 12, 14, 248 });
     center("SECTOR CLEARED", 56, 20, C_EXIT);
 
     int y = 92;
@@ -669,6 +671,8 @@ int main(int argc, char **argv)
     SetWindowSize(VIEW_W * scale, VIEW_H * scale);
     SetWindowPosition(60, 60);
 
+    sfx_init();
+
     RenderTexture2D canvas = LoadRenderTexture(VIEW_W, VIEW_H);
     SetTextureFilter(canvas.texture, TEXTURE_FILTER_POINT);
 
@@ -739,8 +743,23 @@ int main(int argc, char **argv)
             if (IsKeyPressed(KEY_R)) sim_load(&world, &tune, world.levelIndex);
 
             sim_step(&world, &tune, &in, dt);
+            /* 사건 하나에 소리 하나. sim 이 이벤트로 알려주므로 렌더/사운드가
+             * 게임 규칙을 다시 판정할 필요가 없다 */
+            if (world.evPad)         sfx_play(SFX_PAD);
+            else if (world.evJump)   sfx_play(SFX_JUMP);
+            if (world.evDoubleJump)  sfx_play(SFX_JUMP2);
+            if (world.evWallJump)    sfx_play(SFX_WALL);
+            if (world.evDash)        sfx_play(SFX_DASH);
+            if (world.evLand && !world.evPad) sfx_play(SFX_LAND);
+            if (world.evDisk)        sfx_play(SFX_DISK);
+            if (world.evEquip)       sfx_play(SFX_EQUIP);
+            if (world.evDeny)        sfx_play(SFX_DENY);
+            if (world.evCheckpoint)  sfx_play(SFX_CHECK);
+            if (world.evDeath)
+                sfx_play(world.deathCause == DEATH_SPIKE ? SFX_HURT : SFX_ERASE);
 
             if (world.state == ST_WON) {
+                sfx_play(SFX_EXIT);
                 gained = sim_grant_reward(&world);   /* 디스크 안에 들어 있던 유틸리티 */
                 prog.unlocked = world.unlocked;
                 prog.deaths  += world.deaths;
@@ -763,8 +782,10 @@ int main(int argc, char **argv)
             else if (screen == SCR_END)  draw_end(&world, &prog);
             else {
                 draw_world(&world, (float)GetTime(), camX);
-                /* 죽어 있는 동안에는 힌트를 끈다 — 사망 문구와 겹쳐서 둘 다 안 읽힌다 */
-                if (world.deathCause == DEATH_NONE) draw_hints(&world, camX);
+                /* 죽었거나 클리어 화면일 때는 힌트를 끈다.
+                 * 오버레이보다 먼저 그려지므로 반투명 뒤로 비쳐서 둘 다 안 읽힌다. */
+                if (world.deathCause == DEATH_NONE && screen != SCR_CLEAR)
+                    draw_hints(&world, camX);
                 draw_hud(&world, toast, toastTimer);
                 if (screen == SCR_CLEAR) draw_clear(&world, gained);
             }
@@ -780,6 +801,7 @@ int main(int argc, char **argv)
         if ((shotMode || shotMenu) && ++frames >= shotAt) { TakeScreenshot("shot.png"); break; }
     }
 
+    sfx_shutdown();
     UnloadRenderTexture(canvas);
     CloseWindow();
     return 0;
