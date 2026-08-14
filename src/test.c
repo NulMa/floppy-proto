@@ -158,8 +158,19 @@ int main(void)
         snprintf(label, sizeof(label), "%s: 터미널이 전부 발판 위에 있다", L->id);
         check(termOK, label);
 
+        /* 디스크는 출구 근처여야 "챙길까 말까"를 클리어 직전에 정하게 된다.
+         * 단 용량을 먹는 디스크는 선택 회수물이 아니라 목표 그 자체라 예외다. */
         snprintf(label, sizeof(label), "%s: 디스크가 출구에서 8칸 이내", L->id);
-        check(L->diskCol < 0 || abs(L->diskCol - L->exitCol) <= 8, label);
+        check(L->diskCol < 0 || L->diskCost > 0 || abs(L->diskCol - L->exitCol) <= 8, label);
+
+        if (L->diskCost > 0) {
+            int left = CAP_SLOTS - L->diskCost;
+            printf("      디스크 %d칸 → 회수 후 %d칸 남음\n", L->diskCost, left);
+            snprintf(label, sizeof(label), "%s: 디스크를 담아도 boot 는 들 수 있다", L->id);
+            check(left >= ABILITY_COST[AB_BOOT], label);
+            snprintf(label, sizeof(label), "%s: 디스크가 실제로 용량을 조인다", L->id);
+            check(left < CAP_SLOTS / 2, label);
+        }
 
         int badHint = 0;
         for (int h = 0; h < L->hintCount; h++)

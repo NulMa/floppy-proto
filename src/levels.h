@@ -57,6 +57,15 @@ typedef struct {
     short diskCol, diskRow;
 
     float formatSpeed;       /* 스테이지별 추격 압력 */
+
+    /* 이 디스크가 먹는 용량(칸). 0 이면 공짜 — 대부분의 스테이지가 그렇다.
+     *
+     * ★ 마지막에 붙여둔다. 중간에 끼우면 기존 레벨의 위치 초기화가 통째로 밀린다.
+     *   (실제로 한 번 그럴 뻔했다 — formatSpeed 가 diskCost 자리로 들어갔다)
+     *
+     * 마지막 스테이지에서만 쓴다. 담으려면 능력을 버려야 하므로
+     * **회수한 뒤의 길은 남는 칸으로 갈 수 있어야 한다.** test.bat 이 검사한다. */
+    short diskCost;
 } Level;
 
 extern const Level LEVELS[];

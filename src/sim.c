@@ -108,6 +108,8 @@ int sim_used_slots(const World *w)
 {
     int s = 0;
     for (int i = 0; i < AB_COUNT; i++) if (w->p.has[i]) s += ABILITY_COST[i];
+    /* 들고 있는 디스크도 용량을 먹는다 (마지막 스테이지) */
+    if (w->hasDisk) s += LEVELS[w->levelIndex].diskCost;
     return s;
 }
 int sim_free_slots(const World *w) { return CAP_SLOTS - sim_used_slots(w); }
@@ -391,13 +393,19 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         w->formatX += L->formatSpeed * t->formatScale * dt;
     }
 
-    /* ── 디스크 회수 — 선택이다. 없는 스테이지도 있다 ── */
+    /* ── 디스크 회수 — 선택이다. 없는 스테이지도 있다.
+     * 용량을 먹는 디스크(마지막 스테이지)는 빈 칸이 모자라면 안 담긴다.
+     * 능력을 버리러 터미널로 돌아가라는 뜻이다. */
     {
         int dr, dc;
         if (touches(w, T_DISK, &dr, &dc)) {
-            w->map[dr][dc] = T_EMPTY;
-            w->hasDisk = 1;
-            w->evDisk = 1; w->diskFlash = 1.2f;
+            if (L->diskCost <= 0 || sim_free_slots(w) >= L->diskCost) {
+                w->map[dr][dc] = T_EMPTY;
+                w->hasDisk = 1;
+                w->evDisk = 1; w->diskFlash = 1.2f;
+            } else {
+                w->evDeny = 1; w->denyFlash = 0.5f;
+            }
         }
     }
 

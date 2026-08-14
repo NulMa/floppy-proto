@@ -448,6 +448,165 @@ static const HintSpec L15_HINT[] = {
     { 84, 13, 0,       "DRIVE SLOT",             "right past the shaft" },
 };
 
+/* ══════════════════════════════════════════════════════════════════════
+ *  16 — CRASH.LOG   [어려움]
+ *
+ *  저천장 통로 60칸을 파동 52px/s 로 통과한다. 점프로는 못 빠져나온다 —
+ *  구덩이마다 대시를 정확히 써야 하고, 터미널은 셋뿐이다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L16_BOX[] = {
+    {  0,  0, 88,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 87,  0,  1, 18, T_SOLID },
+    {  1, 15, 12,  3, T_SOLID },
+    { 13,  0, 60, 13, T_SOLID },      /* 저천장 x13~72 — 여유 2칸 */
+    { 13, 15, 10,  3, T_SOLID },
+    { 23, 17,  4,  1, T_SPIKE },
+    { 27, 15, 10,  3, T_SOLID },
+    { 37, 17,  4,  1, T_SPIKE },
+    { 41, 15, 10,  3, T_SOLID },
+    { 51, 17,  4,  1, T_SPIKE },
+    { 55, 15, 10,  3, T_SOLID },
+    { 65, 17,  4,  1, T_SPIKE },
+    { 69, 15, 18,  3, T_SOLID },
+};
+static const TermSpec L16_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 58, 14, 0 } };
+static const HintSpec L16_HINT[] = {
+    {  3, 12, 0,       "60 TILES OF LOW CEILING", "the format is at 52" },
+    { 23, 11, "SHIFT", "dash.exe",                "four gaps, no jumping" },
+    { 82, 12, 0,       "CRASH.LOG",               "the last thing it wrote" },
+    { 85, 13, 0,       "DRIVE SLOT",              0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  17 — KERNEL.SYS   [어려움]
+ *
+ *  굴뚝 둘. 첫째는 10칸, 둘째는 12칸. 사이 지형이 전부 가시라 떨어지면 끝이다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L17_BOX[] = {
+    {  0,  0, 80,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 79,  0,  1, 18, T_SOLID },
+    {  1, 15, 20,  3, T_SOLID },
+    { 13,  4,  2, 10, T_SOLID },      /* 굴뚝1 (x15~17 통로) */
+    { 18,  4,  2, 10, T_SOLID },
+    { 20,  4, 10,  2, T_SOLID },      /* 위 발판 surface row4 */
+    { 30, 17, 12,  1, T_SPIKE },
+    { 42, 15, 16,  3, T_SOLID },
+    { 44,  3,  2, 11, T_SOLID },      /* 굴뚝2 (x46~48 통로) — row14 는 통로 */
+    { 49,  3,  2, 11, T_SOLID },
+    { 51,  3, 16,  2, T_SOLID },      /* 위 발판 surface row3 */
+    { 58, 17, 11,  1, T_SPIKE },
+    { 69, 15, 10,  3, T_SOLID },
+};
+static const TermSpec L17_TERM[] = { { 3, 14, 0 }, { 24, 3, 0 }, { 46, 14, 0 }, { 56, 2, 0 } };
+static const HintSpec L17_HINT[] = {
+    {  3, 12, 0,       "TWO SHAFTS",  "nothing but spikes below" },
+    { 16, 12, "4",     "grip.exe",    "zigzag between the walls" },
+    { 46, 12, 0,       "AGAIN, TALLER", 0 },
+    { 74, 12, 0,       "KERNEL.SYS",  "the part that never crashed" },
+    { 77, 13, 0,       "DRIVE SLOT",  0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  18 — LASTMAIL.TXT   [어려움]
+ *
+ *  구간마다 터미널이 **다른 유틸리티만** 갖고 있다.
+ *    터미널1 boot|dash → 평지 구덩이 / 터미널2 boot|grip → 굴뚝 /
+ *    터미널3 boot|glide → 하강
+ *  셋을 다 들면 15칸이라 12칸에 안 들어간다 → **매번 갈아끼워야 한다.**
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L18_BOX[] = {
+    {  0,  0, 96,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 95,  0,  1, 18, T_SOLID },
+    {  1, 15, 14,  3, T_SOLID },
+    { 15, 17,  6,  1, T_SPIKE },
+    { 21, 15, 12,  3, T_SOLID },
+    { 33, 17,  6,  1, T_SPIKE },
+    { 39, 15, 14,  3, T_SOLID },
+    { 43,  4,  2, 10, T_SOLID },      /* 굴뚝 (x45~47 통로) */
+    { 48,  4,  2, 10, T_SOLID },
+    { 50,  4, 12,  2, T_SOLID },      /* 위 발판 surface row4 */
+    { 62, 17, 14,  1, T_SPIKE },
+    { 71,  9, 10,  2, T_SOLID },      /* 5칸 하강 · 9칸 구덩이 → glide */
+    { 81, 17,  6,  1, T_SPIKE },
+    { 87, 15,  8,  3, T_SOLID },
+};
+static const TermSpec L18_TERM[] = {
+    {  3, 14, AB(AB_BOOT) | AB(AB_DASH)  },
+    { 41, 14, AB(AB_BOOT) | AB(AB_GRIP)  },
+    { 58,  3, AB(AB_BOOT) | AB(AB_GLIDE) },
+};
+static const HintSpec L18_HINT[] = {
+    {  3, 12, 0,       "EACH TERMINAL HAS ONE TOOL", "you cannot carry all three" },
+    { 41, 12, "4",     "grip.exe only here",         0 },
+    { 58,  1, "3",     "glide.exe only here",        0 },
+    { 90, 12, 0,       "LASTMAIL.TXT",               "sent, no reply" },
+    { 93, 13, 0,       "DRIVE SLOT",                 0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  19 — GOODBYE.TXT   [어려움]
+ *
+ *  종합. 대시 구간 → 굴뚝 → 활공 하강. 터미널 사이 간격이 넓다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L19_BOX[] = {
+    {  0,  0, 96,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 95,  0,  1, 18, T_SOLID },
+    {  1, 15, 16,  3, T_SOLID },
+    { 17, 17,  6,  1, T_SPIKE },
+    { 23, 15, 10,  3, T_SOLID },
+    { 27, 14,  4,  1, T_SPIKE },
+    { 33, 17,  6,  1, T_SPIKE },
+    { 39, 15, 14,  3, T_SOLID },
+    { 43,  4,  2, 10, T_SOLID },
+    { 48,  4,  2, 10, T_SOLID },
+    { 50,  4, 14,  2, T_SOLID },      /* surface row4 */
+    { 64, 17, 10,  1, T_SPIKE },
+    { 74,  9,  8,  2, T_SOLID },      /* 5칸 하강 · 10칸 구덩이 → glide */
+    { 82, 17,  5,  1, T_SPIKE },
+    { 87, 15,  8,  3, T_SOLID },
+};
+static const TermSpec L19_TERM[] = { { 3, 14, 0 }, { 41, 14, 0 }, { 60, 3, 0 } };
+static const HintSpec L19_HINT[] = {
+    {  3, 12, 0,       "EVERYTHING AT ONCE", "three terminals, far apart" },
+    { 41, 12, 0,       "SHAFT",              0 },
+    { 62,  2, 0,       "THEN DOWN",          0 },
+    { 90, 12, 0,       "GOODBYE.TXT",        "one line, unfinished" },
+    { 93, 13, 0,       "DRIVE SLOT",         0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  20 — ME.IMG   [어려움]   ★ 클라이맥스
+ *
+ *  **디스크가 9칸을 먹는다.** 12칸 중 3칸만 남으므로 담는 순간
+ *  들 수 있는 건 boot.exe(3칸) 하나뿐이다 — 처음 시작할 때 갖고 있던 그것.
+ *
+ *  그래서 레벨이 두 부분으로 나뉜다.
+ *    x1~54   전 능력을 쓰는 구간 (6칸 구덩이 · 4칸 턱)
+ *    x55~88  **boot 하나로만 가는 길** (4칸 구덩이 · 3칸 턱)
+ *
+ *  담을지 말지가 곧 "지금까지 모은 걸 다 버릴지"다. 규칙과 이야기가 여기서 만난다.
+ *
+ *  ⚠️ 그래서 이 스테이지만 "디스크는 출구 8칸 이내" 규칙에서 빠진다.
+ *    그 규칙은 선택 회수물을 위한 것이고, 여기 디스크는 목표 그 자체다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L20_BOX[] = {
+    {  0,  0, 90,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 89,  0,  1, 18, T_SOLID },
+    {  1, 15, 16,  3, T_SOLID },
+    { 17, 17,  6,  1, T_SPIKE },      /* 6칸 → dash */
+    { 23, 15, 12,  3, T_SOLID },
+    { 27, 11,  6,  4, T_SOLID },      /* 4칸 턱 (surface row11) → jump2 */
+    { 35, 17,  6,  1, T_SPIKE },      /* 6칸 → dash */
+    { 41, 15, 30,  3, T_SOLID },      /* x41~70 — 여기 터미널과 디스크가 있다 */
+    { 71, 17,  4,  1, T_SPIKE },      /* 4칸 → boot 로 넘어진다 */
+    { 75, 15, 14,  3, T_SOLID },
+    { 79, 12,  4,  3, T_SOLID },      /* 3칸 턱 → boot */
+};
+static const TermSpec L20_TERM[] = { { 3, 14, 0 }, { 30, 10, 0 }, { 52, 14, 0 } };
+static const HintSpec L20_HINT[] = {
+    {  3, 12, 0,       "ME.IMG",            "the machine itself" },
+    { 30,  8, 0,       "LAST HARD PART",    0 },
+    { 52, 12, 0,       "DROP EVERYTHING",   "the image needs 9 slots" },
+    { 55,  9, 0,       "9 SLOTS",           "3 left - exactly boot.exe" },
+    { 71, 12, "1",     "boot.exe",          "all you started with" },
+    { 86, 12, 0,       "DRIVE SLOT",        "take it out" },
+};
+
 /* ══════════════════════════════════════════════════════════════════════ */
 
 /* 해금 곡선 — 능력 합계가 12칸을 넘는 순간부터 "무엇을 두고 갈까"가 시작된다.
@@ -565,6 +724,42 @@ const Level LEVELS[] = {
       L15_HINT, (int)(sizeof(L15_HINT)/sizeof(L15_HINT[0])),
       0, AB(AB_DASH),
       88, 2, 15,  84, 14,  78, 4,  42.0f },
+
+    { "s16", "SECTOR 16", "CRASH.LOG", "the last thing it wrote", 16384,
+      L16_BOX,  (int)(sizeof(L16_BOX) /sizeof(L16_BOX[0])),
+      L16_TERM, (int)(sizeof(L16_TERM)/sizeof(L16_TERM[0])),
+      L16_HINT, (int)(sizeof(L16_HINT)/sizeof(L16_HINT[0])),
+      0, AB(AB_DASH),
+      88, 2, 15,  85, 14,  82, 14,  52.0f },
+
+    { "s17", "SECTOR 17", "KERNEL.SYS", "the part that never crashed", 40960,
+      L17_BOX,  (int)(sizeof(L17_BOX) /sizeof(L17_BOX[0])),
+      L17_TERM, (int)(sizeof(L17_TERM)/sizeof(L17_TERM[0])),
+      L17_HINT, (int)(sizeof(L17_HINT)/sizeof(L17_HINT[0])),
+      0, AB(AB_GRIP),
+      80, 2, 15,  77, 14,  74, 14,  46.0f },
+
+    { "s18", "SECTOR 18", "LASTMAIL.TXT", "sent, no reply", 5120,
+      L18_BOX,  (int)(sizeof(L18_BOX) /sizeof(L18_BOX[0])),
+      L18_TERM, (int)(sizeof(L18_TERM)/sizeof(L18_TERM[0])),
+      L18_HINT, (int)(sizeof(L18_HINT)/sizeof(L18_HINT[0])),
+      0, AB(AB_DASH) | AB(AB_GRIP) | AB(AB_GLIDE),
+      96, 2, 15,  93, 14,  90, 14,  44.0f },
+
+    { "s19", "SECTOR 19", "GOODBYE.TXT", "one line, unfinished", 1024,
+      L19_BOX,  (int)(sizeof(L19_BOX) /sizeof(L19_BOX[0])),
+      L19_TERM, (int)(sizeof(L19_TERM)/sizeof(L19_TERM[0])),
+      L19_HINT, (int)(sizeof(L19_HINT)/sizeof(L19_HINT[0])),
+      0, AB(AB_DASH) | AB(AB_GRIP) | AB(AB_GLIDE),
+      96, 2, 15,  93, 14,  90, 14,  48.0f },
+
+    /* ★ 마지막 필드가 diskCost. 이 스테이지만 디스크가 9칸을 먹는다. */
+    { "s20", "SECTOR 20", "ME.IMG", "the machine itself", 1474560,
+      L20_BOX,  (int)(sizeof(L20_BOX) /sizeof(L20_BOX[0])),
+      L20_TERM, (int)(sizeof(L20_TERM)/sizeof(L20_TERM[0])),
+      L20_HINT, (int)(sizeof(L20_HINT)/sizeof(L20_HINT[0])),
+      0, AB(AB_DASH) | AB(AB_JUMP2),
+      90, 2, 15,  86, 14,  55, 14,  44.0f,  9 },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));

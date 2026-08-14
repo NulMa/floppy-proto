@@ -330,6 +330,10 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
         if (p->has[a])
             for (int k = 0; k < ABILITY_COST[a]; k++, cell++)
                 DrawRectangle(6 + cell * 11, 17, 9, 9, AB_COLOR[a]);
+    /* 들고 있는 디스크가 먹는 칸 (마지막 스테이지) */
+    if (w->hasDisk && L->diskCost > 0)
+        for (int k = 0; k < L->diskCost && cell < CAP_SLOTS; k++, cell++)
+            DrawRectangle(6 + cell * 11, 17, 9, 9, C_GOAL);
     for (; cell < CAP_SLOTS; cell++)
         DrawRectangle(6 + cell * 11, 17, 9, 9, (Color){ 22, 26, 40, 255 });
     for (int i = 0; i < CAP_SLOTS; i++)
