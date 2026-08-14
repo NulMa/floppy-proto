@@ -31,7 +31,9 @@ void tune_defaults(Tune *t)
     t->gripJumpY      = -250.0f;
     t->gripStick      = 0.12f;
     t->bootMult       = 1.20f;
-    t->padVel         = -430.0f;   /* 정점 약 103px = 6.4칸 */
+    t->padVel         = -390.0f;   /* 정점 약 85px = 5.3칸 */
+    t->padVelHold     = -520.0f;   /* 점프키를 누른 채 밟으면 150px = 9.4칸 */
+    t->deathFreeze    = 0.45f;
     /* 세로 구간에서는 가로 진행이 0인데 파동은 계속 온다.
      * 200 이면 12칸 굴뚝을 오르는 동안(약 3.3초) 여유가 1.3배밖에 안 됐다.
      * 파동 속도를 낮추면 어려운 티어가 중간보다 느려져 난이도 곡선이 무너지므로
@@ -48,7 +50,7 @@ int tune_set(Tune *t, const char *key, float v)
     K(coyoteTime) K(jumpBuffer)
     K(jump2Mult) K(dashSpeed) K(dashTime) K(dashCooldown)
     K(glideFall) K(gripSlide) K(gripJumpX) K(gripJumpY) K(gripStick) K(bootMult)
-    K(padVel) K(formatLead) K(formatScale)
+    K(padVel) K(padVelHold) K(deathFreeze) K(formatLead) K(formatScale)
 #undef K
     return 0;
 }
@@ -260,6 +262,20 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
     if (w->denyFlash  > 0) w->denyFlash  -= dt;
     if (w->checkFlash > 0) w->checkFlash -= dt;
     if (w->diskFlash  > 0) w->diskFlash  -= dt;
+    if (w->padFlash   > 0) w->padFlash   -= dt;
+
+    /* ── 죽은 직후에는 멈춰 있는다 ──
+     * 곧바로 되살리면 무슨 일이 일어났는지 못 본다. 가시를 밟았는지
+     * 파동에 잡혔는지도 구분이 안 간다. 잠깐 얼려서 보여주고 되살린다. */
+    if (w->deathTimer > 0.0f) {
+        w->deathTimer -= dt;
+        if (w->deathTimer <= 0.0f) {
+            w->deathTimer = 0.0f;
+            w->deathCause = DEATH_NONE;
+            respawn(w, t);
+        }
+        return;
+    }
 
     /* 로드아웃 — 터미널 위에서, 그 터미널에 남아 있는 유틸리티만 */
     if (in->toggleAbility >= 0 && in->toggleAbility < AB_COUNT) {
@@ -367,13 +383,20 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         p->dashUsed = 0;
         p->airJumps = p->has[AB_JUMP2] ? 1 : 0;
 
-        /* 점프패드 — 능력 없이도 높이 올려준다. 레벨 문법이지 능력이 아니다. */
+        /* 점프패드 — 능력 없이도 높이 올려준다. 레벨 문법이지 능력이 아니다.
+         *
+         * ★ 정해진 속도로 그냥 쏘면 조작이 아니라 사고처럼 느껴진다.
+         *   **점프키를 누른 채 밟으면 더 높이** 튄다 (5.3칸 → 9.4칸).
+         *   플레이어가 개입할 여지가 있어야 "조작"이 된다. */
         if (tile_under(w, T_PAD)) {
-            p->vy = t->padVel;
+            p->vy = in->jumpHeld ? t->padVelHold : t->padVel;
             p->onGround = 0;
             p->coyote = 0;
+            p->buffer = 0;      /* 패드 직후 점프버퍼가 남아 2단점프를 낭비하지 않게 */
             p->dashUsed = 0;
+            p->airJumps = p->has[AB_JUMP2] ? 1 : 0;
             w->evPad = 1;
+            w->padFlash = 0.25f;
         }
     }
 
@@ -413,12 +436,22 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         }
     }
 
-    /* ── 사망 ── */
-    if (p->x < w->formatX || p->y > VIEW_H + TILE || touches(w, T_SPIKE, 0, 0)) {
-        w->deaths++;
-        w->evDeath = 1;
-        respawn(w, t);
-        return;
+    /* ── 사망 ── 원인을 남긴다. 연출이 달라야 무슨 일인지 읽힌다 */
+    {
+        int cause = DEATH_NONE;
+        if (touches(w, T_SPIKE, 0, 0))      cause = DEATH_SPIKE;
+        else if (p->x < w->formatX)         cause = DEATH_FORMAT;
+        else if (p->y > VIEW_H + TILE)      cause = DEATH_FALL;
+
+        if (cause != DEATH_NONE) {
+            w->deaths++;
+            w->evDeath = 1;
+            w->deathCause = cause;
+            w->deathTimer = t->deathFreeze;
+            p->vx = p->vy = 0.0f;
+            p->dashTimer = 0.0f;
+            return;
+        }
     }
 
     /* ── 클리어는 출구로 한다 ── */

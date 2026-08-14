@@ -32,6 +32,9 @@ typedef enum {
 } Tile;
 typedef enum { ST_PLAY = 0, ST_WON } State;
 
+/* 왜 죽었는지 — 연출이 달라야 무슨 일이 일어났는지 읽힌다 */
+enum { DEATH_NONE = 0, DEATH_SPIKE, DEATH_FORMAT, DEATH_FALL };
+
 /* ★ 순서 = 획득 순서 = 키 번호.
  *   1 boot / 2 dash / 3 glide / 4 grip / 5 jump2
  *   해금 순서와 키가 어긋나면 첫 능력이 5번 키가 되어버린다. */
@@ -50,7 +53,11 @@ typedef struct {
     float glideFall;
     float gripSlide, gripJumpX, gripJumpY, gripStick;
     float bootMult;
-    float padVel;             /* 점프패드가 튕겨 올리는 속도 (음수) */
+    /* 점프패드 — 그냥 정해진 속도로 쏘면 조작이 아니라 사고처럼 느껴진다.
+     * 점프키를 누르고 있으면 더 높이 튄다. 플레이어가 개입할 여지를 남긴다. */
+    float padVel;             /* 기본 튕김 (음수) */
+    float padVelHold;         /* 점프키를 누른 채 밟았을 때 */
+    float deathFreeze;        /* 죽고 나서 멈춰 있는 시간 — 죽은 걸 보여줘야 한다 */
     float formatLead;         /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
     float formatScale;        /* 레벨별 파동 속도에 곱하는 전역 배수 (난이도 조절용) */
 } Tune;
@@ -91,9 +98,13 @@ typedef struct {
 
     /* 안내는 상태를 안 갖는다 — 힌트는 플레이어 위치의 함수라 렌더가 직접 계산한다 */
 
+    /* 죽으면 바로 되살리지 않는다. 무슨 일이 일어났는지 보여줄 시간이 필요하다. */
+    float deathTimer;
+    int   deathCause;      /* DEATH_* */
+
     int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip;
     int   evCheckpoint, evDeath, evPad, evDisk;
-    float denyFlash, checkFlash, diskFlash;
+    float denyFlash, checkFlash, diskFlash, padFlash;
 } World;
 
 typedef struct {
