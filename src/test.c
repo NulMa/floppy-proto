@@ -242,6 +242,52 @@ int main(void)
         check(gap <= glideReach, label);
     }
 
+    /* ── 07 MAZE.DAT: 단독으로 전 구간을 여는 능력이 없어야 한다 ──
+     * 관문마다 답을 여러 개 두는 방식으로는 안 된다 — jump2 는 높이도 거리도 1위라
+     * 항상 상위호환이 된다. 길 자체를 갈라야 하고, 저천장 통로가 유일한 차단 수단이다. */
+    if (LEVEL_COUNT > 6) {
+        printf("\n== 07 MAZE.DAT 불변식 ==\n");
+        memset(&w, 0, sizeof(w));
+        sim_load(&w, &t, 6);
+        int floorR = surface_row(&w, 2);
+        float s1step = (float)(floorR - surface_row(&w, 13)) * TILE;
+        float s2gap  = (float)widest_gap(&w, 15, 17, 32, 61) * TILE;
+        float s3gap  = (float)widest_gap(&w, 15, 17, 62, 94) * TILE;
+        float s3top  = (float)(floorR - surface_row(&w, 70)) * TILE;
+        int blockBottom = 0;
+        for (int r = MAP_H - 1; r >= 0; r--) if (w.map[r][62] == T_SOLID && r < 14) { blockBottom = r; break; }
+        float faceReach = ((float)floorR * TILE - PLAYER_H) - (float)(blockBottom + 1) * TILE;
+
+        printf("  발판 %.1f칸 / 구덩이 %.1f칸 / 통로 %.1f칸 / 위층 %.1f칸 / 벽면까지 %.0fpx\n",
+               s1step / TILE, s2gap / TILE, s3gap / TILE, s3top / TILE, faceReach);
+        check(s1step > R.baseH,     "구간1: 맨몸 불가");
+        check(s2gap  > R.baseD,     "구간2: 맨몸 불가");
+        check(s3top  > R.jump2H,    "구간3: 위층은 점프로 못 오른다");
+        check(faceReach <= R.baseH, "구간3: 맨몸 점프로 벽면에 손이 닿는다 (grip 루트 성립)");
+        check(s3gap  > R.lowCeilD,  "구간3: 저천장 통로는 점프로 못 건넌다");
+
+        int masterKey = 0;
+        printf("\n  단독 통과 판정\n");
+        for (int a = 0; a < AB_COUNT; a++) {
+            float hgt = R.baseH, dst = R.baseD;
+            int wall = 0, glides = 0;
+            if (a == AB_JUMP2) { hgt = R.jump2H; dst = R.jump2D; }
+            if (a == AB_BOOT)  { hgt = R.bootH;  dst = R.bootD;  }
+            if (a == AB_DASH)  { dst = R.dashD; }
+            if (a == AB_GRIP)  { wall = 1; }
+            if (a == AB_GLIDE) { glides = 1; }
+            int s1 = (hgt >= s1step) || wall;
+            int s2 = (dst >= s2gap);
+            float corr = (a == AB_DASH) ? R.dashD : (glides ? R.lowCeilD * 1.6f : R.lowCeilD);
+            int s3 = (corr >= s3gap) || wall;
+            printf("    [%d] %-10s  1:%s 2:%s 3:%s%s\n", a + 1, ABILITY_FILE[a],
+                   s1 ? "O" : "X", s2 ? "O" : "X", s3 ? "O" : "X",
+                   (s1 && s2 && s3) ? "   <- 마스터키" : "");
+            if (s1 && s2 && s3) masterKey = 1;
+        }
+        check(!masterKey, "단독으로 전 구간을 여는 능력이 없다");
+    }
+
     printf("\n%s  (%d 실패)\n\n", failures ? "== 실패 ==" : "== 전부 통과 ==", failures);
     return failures ? 1 : 0;
 }

@@ -159,6 +159,150 @@ static const HintSpec L05_HINT[] = {
     { 71, 12, 0,       "DRIVE SLOT",       0 },
 };
 
+/* ══════════════════════════════════════════════════════════════════════
+ *  06 — DIARY.TXT   [중간]   보상: 없음
+ *
+ *  grip 도입. 그리고 **여기서 처음 12칸을 넘긴다** (boot3+dash4+glide4+grip4 = 15칸).
+ *  뭘 두고 갈지 고르게 되는 첫 스테이지다.
+ *
+ *  굴뚝(양쪽 벽 사이 3칸)으로 만든다. 벽 하나짜리 등반은 벽점프로 튕겨 나갔다가
+ *  다시 붙어야 해서 손맛이 나쁘다 — 마주 보는 벽이 있으면 지그재그로 올라간다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L06_BOX[] = {
+    {  0,  0, 56,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 55,  0,  1, 18, T_SOLID },
+    {  1, 15, 20,  3, T_SOLID },      /* 바닥 A */
+    { 13,  4,  2, 10, T_SOLID },      /* 굴뚝 왼벽 (rows 4~13) */
+    { 18,  4,  2, 10, T_SOLID },      /* 굴뚝 오른벽 — 사이 x15~17 이 통로 */
+    { 20,  4, 10,  2, T_SOLID },      /* 굴뚝 위 발판 (surface row4) */
+    { 21, 17, 12,  1, T_SPIKE },
+    { 33, 15, 22,  3, T_SOLID },      /* 바닥 B — 위에서 떨어져 내려온다 */
+};
+static const TermSpec L06_TERM[] = { { 3, 14, 0 }, { 22, 3, 0 }, { 46, 14, 0 } };
+static const HintSpec L06_HINT[] = {
+    {  3, 12, 0,       "15 SLOTS OF UTILITIES", "you have 12" },
+    { 16, 12, "4",     "grip.exe",              "jump at a wall and hold toward it" },
+    { 16,  2, 0,       "ZIGZAG UP",             0 },
+    { 27,  2, 0,       "THEN DROP",             0 },
+    { 50, 12, 0,       "DIARY.TXT",             "entries stop in march" },
+    { 53, 13, 0,       "DRIVE SLOT",            0 },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  07 — MAZE.DAT   [중간]   보상: 없음
+ *
+ *  구간마다 **서로 다른 능력으로 가는 두 갈래 길**.
+ *    구간1  9칸 장벽      : grip 직등 / boot 로 3칸 발판 2개
+ *    구간2  6칸 구덩이 x2 : dash
+ *    구간3  저천장 통로   : dash·glide  /  위층 9칸 : grip
+ *
+ *  ★ 불변식: 단독으로 전 구간을 여는 능력이 없어야 한다.
+ *    구간3 저천장(도달 2.2칸)이 유일한 jump2 차단 수단이다 — 나중에 jump2 를 얻어도 유지된다.
+ *  ★ 위층 아랫면은 row12 여야 맨몸 점프(38px)로 벽면에 손이 닿는다.
+ *    row10 까지만 내려오면 grip 루트가 통째로 막힌다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L07_BOX[] = {
+    {  0,  0, 96,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 95,  0,  1, 18, T_SOLID },
+    {  1, 15, 31,  3, T_SOLID },
+    { 13, 12,  2,  1, T_SOLID },      /* 발판 (3칸) */
+    { 16,  9,  2,  1, T_SOLID },      /* 발판 (3칸) */
+    { 19,  6,  3,  9, T_SOLID },      /* 장벽 — 꼭대기는 바닥에서 9칸 */
+    { 32, 15,  7,  3, T_SOLID },
+    { 39, 17,  6,  1, T_SPIKE },
+    { 45, 15,  6,  3, T_SOLID },
+    { 51, 17,  6,  1, T_SPIKE },
+    { 57, 15,  5,  3, T_SOLID },
+    { 62,  6, 29,  7, T_SOLID },      /* 위층 x62~90, rows 6~12 */
+    { 62, 15,  6,  3, T_SOLID },      /* 통로 바닥 — 머리 위 여유 2칸 */
+    { 72, 17, 23,  1, T_SOLID },
+    { 72, 14, 19,  1, T_SOLID },      /* 낮은 천장 */
+};
+static const TermSpec L07_TERM[] = { { 2, 14, 0 }, { 29, 14, 0 }, { 58, 14, 0 } };
+static const HintSpec L07_HINT[] = {
+    {  2, 12, 0,       "TWO WAYS PAST EACH PART", "pick what you brought" },
+    { 17,  4, 0,       "grip.exe OR boot.exe",    0 },
+    { 33, 12, "SHIFT", "dash.exe",                "flat gaps" },
+    { 58, 12, 0,       "LOW CEILING BELOW",       "or climb over the top" },
+    { 90, 13, 0,       "MAZE.DAT",                "someone mapped this by hand" },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  08 — THEME.MOD   [중간]   보상: jump2
+ *
+ *  세로 등반. 앞은 3칸 지그재그(boot), 마지막은 12칸 민벽(grip 전용).
+ *  jump2 를 여기서 주는 이유: 이 다음부터 20칸이 되어 8칸을 버려야 한다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L08_BOX[] = {
+    {  0,  0, 60,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 59,  0,  1, 18, T_SOLID },
+    {  1, 15, 16,  3, T_SOLID },
+    {  6, 12,  3,  1, T_SOLID },      /* 3칸 */
+    { 11,  9,  3,  1, T_SOLID },      /* 3칸 */
+    {  6,  6,  3,  1, T_SOLID },      /* 3칸 — 되돌아간다 */
+    { 11,  3,  3,  1, T_SOLID },      /* 3칸 */
+    { 14,  3, 10,  2, T_SOLID },      /* 위 발판 (surface row3) */
+    { 17, 17,  7,  1, T_SPIKE },
+    { 24, 15, 20,  3, T_SOLID },      /* 바닥 B */
+    { 44,  3,  2, 15, T_SOLID },      /* 12칸 민벽 — grip 전용 */
+    { 46,  3, 10,  2, T_SOLID },      /* 꼭대기 */
+};
+static const TermSpec L08_TERM[] = { { 3, 14, 0 }, { 20, 2, 0 }, { 40, 14, 0 } };
+static const HintSpec L08_HINT[] = {
+    {  3, 12, 0,       "STRAIGHT UP",     0 },
+    {  8, 10, "1",     "boot.exe",        "3 tiles at a time" },
+    { 20,  1, 0,       "NOW DROP RIGHT",  0 },
+    { 43, 12, "4",     "grip.exe",        "12 tiles, no ledges" },
+    { 52,  1, 0,       "THEME.MOD",       "his favourite" },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  09 — SAVE02.DAT   [중간]   보상: 없음
+ *
+ *  여기서부터 20칸이다. jump2(5)+dash(4)+boot(3) = 정확히 12칸.
+ *  4칸 턱(64px)은 boot(55px)로 안 되고 jump2(70px)로만 된다 — 두 능력을 다 요구한다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L09_BOX[] = {
+    {  0,  0, 68,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 67,  0,  1, 18, T_SOLID },
+    {  1, 15, 12,  3, T_SOLID },
+    { 13, 11, 12,  7, T_SOLID },      /* 4칸 턱 (surface row11) — jump2 */
+    { 25, 17,  6,  1, T_SPIKE },      /* 6칸 평지 구덩이 — dash */
+    { 31, 11, 10,  7, T_SOLID },
+    { 41,  7, 10, 11, T_SOLID },      /* 4칸 턱 (surface row7) — jump2 */
+    { 51, 17,  6,  1, T_SPIKE },      /* 6칸 — dash */
+    { 57,  7, 10, 11, T_SOLID },
+};
+static const TermSpec L09_TERM[] = { { 3, 14, 0 }, { 20, 10, 0 }, { 36, 10, 0 }, { 60, 6, 0 } };
+static const HintSpec L09_HINT[] = {
+    {  3, 12, 0,       "20 SLOTS NOW",  "12 fit" },
+    { 13,  9, "5",     "jump2.exe",     "boot alone is 3 tiles" },
+    { 25,  9, "SHIFT", "dash.exe",      "and you still need this" },
+    { 63,  5, 0,       "SAVE02.DAT",    "a later save, same game" },
+};
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  10 — README.1ST   [중간]   보상: 없음
+ *
+ *  속도. 파동 48px/s 에 터미널을 둘만 둔다. 한 번 커밋하면 오래 달려야 한다.
+ *  관문 자체는 쉽되(6칸 구덩이) **연속**이라 멈추면 잡힌다.
+ * ══════════════════════════════════════════════════════════════════════ */
+static const Box L10_BOX[] = {
+    {  0,  0, 72,  1, T_SOLID }, {  0,  0,  1, 18, T_SOLID }, { 71,  0,  1, 18, T_SOLID },
+    {  1, 15, 14,  3, T_SOLID },
+    { 15, 17,  6,  1, T_SPIKE },
+    { 21, 15, 12,  3, T_SOLID },
+    { 33, 17,  6,  1, T_SPIKE },
+    { 39, 15, 12,  3, T_SOLID },
+    { 51, 17,  6,  1, T_SPIKE },
+    { 57, 15, 14,  3, T_SOLID },
+    { 27, 14,  2,  1, T_SPIKE },
+    { 41, 14,  2,  1, T_SPIKE },      /* 터미널(x45)과 겹치지 않게 떨어뜨린다 */
+};
+static const TermSpec L10_TERM[] = { { 3, 14, 0 }, { 45, 14, 0 } };
+static const HintSpec L10_HINT[] = {
+    {  3, 12, 0,       "THE FORMAT IS FASTER HERE", "do not stop" },
+    { 15, 12, 0,       "THREE GAPS",               "no terminal between" },
+    { 66, 12, 0,       "README.1ST",               "read me first" },
+    { 69, 13, 0,       "DRIVE SLOT",               0 },
+};
+
 /* ══════════════════════════════════════════════════════════════════════ */
 
 /* 해금 곡선 — 능력 합계가 12칸을 넘는 순간부터 "무엇을 두고 갈까"가 시작된다.
@@ -204,6 +348,43 @@ const Level LEVELS[] = {
       L05_HINT, (int)(sizeof(L05_HINT)/sizeof(L05_HINT[0])),
       AB(AB_GRIP), AB(AB_DASH) | AB(AB_GLIDE),
       76, 2, 8,  71, 12,  68, 12,  30.0f },
+
+    { "s06", "SECTOR 06", "DIARY.TXT", "entries stop in march", 8192,
+      L06_BOX,  (int)(sizeof(L06_BOX) /sizeof(L06_BOX[0])),
+      L06_TERM, (int)(sizeof(L06_TERM)/sizeof(L06_TERM[0])),
+      L06_HINT, (int)(sizeof(L06_HINT)/sizeof(L06_HINT[0])),
+      0, AB(AB_GRIP),
+      56, 2, 15,  53, 14,  50, 14,  32.0f },
+
+    /* needs = 0 : 구간마다 길이 갈려서 **어느 한 능력도 필수가 아니다.**
+     * (다만 구간2 평지 구덩이는 dash 가 사실상 유일한 답이다 — 아래 needs 에 넣어둔다) */
+    { "s07", "SECTOR 07", "MAZE.DAT", "someone mapped this by hand", 12288,
+      L07_BOX,  (int)(sizeof(L07_BOX) /sizeof(L07_BOX[0])),
+      L07_TERM, (int)(sizeof(L07_TERM)/sizeof(L07_TERM[0])),
+      L07_HINT, (int)(sizeof(L07_HINT)/sizeof(L07_HINT[0])),
+      0, AB(AB_DASH),
+      96, 2, 15,  93, 16,  90, 16,  34.0f },
+
+    { "s08", "SECTOR 08", "THEME.MOD", "his favourite", 57344,
+      L08_BOX,  (int)(sizeof(L08_BOX) /sizeof(L08_BOX[0])),
+      L08_TERM, (int)(sizeof(L08_TERM)/sizeof(L08_TERM[0])),
+      L08_HINT, (int)(sizeof(L08_HINT)/sizeof(L08_HINT[0])),
+      AB(AB_JUMP2), AB(AB_BOOT) | AB(AB_GRIP),
+      60, 2, 15,  54, 2,  51, 2,  34.0f },
+
+    { "s09", "SECTOR 09", "SAVE02.DAT", "a later save, same game", 81920,
+      L09_BOX,  (int)(sizeof(L09_BOX) /sizeof(L09_BOX[0])),
+      L09_TERM, (int)(sizeof(L09_TERM)/sizeof(L09_TERM[0])),
+      L09_HINT, (int)(sizeof(L09_HINT)/sizeof(L09_HINT[0])),
+      0, AB(AB_JUMP2) | AB(AB_DASH),
+      68, 2, 15,  65, 6,  62, 6,  36.0f },
+
+    { "s10", "SECTOR 10", "README.1ST", "read me first", 2048,
+      L10_BOX,  (int)(sizeof(L10_BOX) /sizeof(L10_BOX[0])),
+      L10_TERM, (int)(sizeof(L10_TERM)/sizeof(L10_TERM[0])),
+      L10_HINT, (int)(sizeof(L10_HINT)/sizeof(L10_HINT[0])),
+      0, AB(AB_DASH),
+      72, 2, 15,  69, 14,  66, 14,  48.0f },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));
