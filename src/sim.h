@@ -2,15 +2,15 @@
  *
  * 코어:
  *   용량 12칸(=1.44MB). 능력은 파일이고 칸을 먹는다. 전부는 못 들고 간다.
- *   로드아웃은 **터미널에서만** 바꿀 수 있다. 그래서 커밋이 생기고, 커밋이 전략이 된다.
+ *   로드아웃은 **터미널에서만** 바꾼다. 커밋이 생기고, 커밋이 전략이 된다.
  *   터미널을 떠나면 포맷 파동이 왼쪽에서 쫓아온다. "갈 수 있나"가 "제때 갈 수 있나"가 된다. */
 #ifndef SIM_H
 #define SIM_H
 
-#define MAP_W  96
+#define MAP_W  96                 /* 레벨이 쓸 수 있는 최대 폭 */
 #define MAP_H  18
 #define TILE   16
-#define VIEW_W (32 * TILE)        /* 화면에 보이는 폭 512 */
+#define VIEW_W (32 * TILE)        /* 512 */
 #define VIEW_H (MAP_H * TILE)     /* 288 */
 
 #define PLAYER_W 12
@@ -21,11 +21,13 @@
 #define BYTES_PER_SLOT (TOTAL_BYTES / CAP_SLOTS)
 
 typedef enum { T_EMPTY = 0, T_SOLID, T_GOAL, T_TERMINAL } Tile;
-typedef enum { ST_PLAY = 0, ST_DEAD, ST_WON } State;
+typedef enum { ST_PLAY = 0, ST_WON } State;
 
 typedef enum { AB_JUMP2 = 0, AB_DASH, AB_GLIDE, AB_GRIP, AB_BOOT, AB_COUNT } Ability;
 extern const char *const ABILITY_FILE[AB_COUNT];
 extern const int         ABILITY_COST[AB_COUNT];
+
+#include "levels.h"
 
 typedef struct {
     float gravity, jumpVel, jumpCut, maxFall;
@@ -36,8 +38,9 @@ typedef struct {
     float glideFall;
     float gripSlide, gripJumpX, gripJumpY, gripStick;
     float bootMult;
-    float formatSpeed;      /* 포맷 파동 진행 속도 px/s */
-    float formatLead;       /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
+    float formatLead;         /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
+    float formatScale;        /* 레벨별 파동 속도에 곱하는 전역 배수 (난이도 조절용) */
+    float msgTime;            /* 안내 문구가 떠 있는 시간 */
 } Tune;
 
 void tune_defaults(Tune *t);
@@ -56,18 +59,23 @@ typedef struct {
 } Player;
 
 typedef struct {
+    int    levelIndex;
     unsigned char map[MAP_H][MAP_W];
     Player p;
     State  state;
     float  time;
     int    deaths;
 
-    float formatX;        /* 이 x 왼쪽은 지워졌다. 닿으면 죽는다 */
-    int   atTerminal;     /* 지금 터미널 위에 서 있는가 = 안전 + 로드아웃 변경 가능 */
-    float spawnX, spawnY; /* 마지막으로 밟은 터미널 = 체크포인트 */
-    int   terminalsSeen;
+    float formatX;
+    int   atTerminal;
+    unsigned avail;        /* 지금 터미널에서 장착 가능한 능력. 0 = 전부 */
+    float spawnX, spawnY;
 
-    int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip, evCheckpoint;
+    unsigned msgShown;     /* 이미 띄운 안내 (비트마스크) */
+    float    msgTimer;
+    const char *msgL1, *msgL2;
+
+    int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip, evCheckpoint, evDeath;
     float denyFlash, checkFlash;
 } World;
 
@@ -76,9 +84,11 @@ typedef struct {
     int toggleAbility;   /* -1 = 없음 */
 } Input;
 
-void sim_init(World *w);
+void sim_load(World *w, const Tune *t, int levelIndex);
 void sim_step(World *w, const Tune *t, const Input *in, float dt);
 int  sim_used_slots(const World *w);
 int  sim_free_slots(const World *w);
+int  sim_ability_available(const World *w, int ab);
+const Level *sim_level(const World *w);
 
 #endif

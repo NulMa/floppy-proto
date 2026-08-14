@@ -4,6 +4,10 @@ set ROOT=%~dp0
 set SRC=%ROOT%vendor\raylib-5.5\src
 set RLIB=%ROOT%vendor\raylib-mt\raylib_mt.lib
 
+if not exist "%SRC%\rcore.c" (
+    echo [INFO] raylib source missing - run fetch-deps.bat first
+    exit /b 1
+)
 if not exist "%RLIB%" (
     echo [INFO] raylib_mt.lib not found - building raylib from source first...
     call "%ROOT%build-raylib.bat"
@@ -18,7 +22,7 @@ if errorlevel 1 (
 if not exist "%ROOT%build" mkdir "%ROOT%build"
 
 cl /nologo /O2 /Oi /MT /Gy /GS- /W3 /utf-8 -D_CRT_SECURE_NO_WARNINGS /I"%SRC%" ^
-   "%ROOT%src\main.c" "%ROOT%src\sim.c" ^
+   "%ROOT%src\main.c" "%ROOT%src\sim.c" "%ROOT%src\levels.c" ^
    /Fe:"%ROOT%build\floppy.exe" /Fo:"%ROOT%build\\" ^
    /link /OPT:REF /OPT:ICF /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup ^
    "%RLIB%" opengl32.lib gdi32.lib winmm.lib user32.lib shell32.lib

@@ -7,56 +7,6 @@ const char *const ABILITY_FILE[AB_COUNT] = {
 };
 const int ABILITY_COST[AB_COUNT] = { 5, 4, 4, 4, 3 };
 
-/* ── 레벨 ────────────────────────────────────────────────────────────
- *
- * 96x18. 96자짜리 문자열 18줄은 손으로 못 맞추므로 사각형 목록으로 짓는다.
- *
- * 구간마다 **서로 다른 능력으로 가는 두 갈래 길**이 있는 게 핵심이다.
- * 관문마다 정답을 여러 개 두는 방식으로는 안 된다 — jump2 가 높이도 거리도
- * 최상위라 항상 상위호환이 되기 때문이다. 길 자체를 갈라야 한다.
- *
- *   구간1 (x1~31)   세로 장벽 9칸   : grip 으로 직등 / boot·jump2 로 3칸 발판
- *   구간2 (x32~61)  구덩이 6칸 x2   : dash / jump2        (평지라 glide 는 무의미)
- *   구간3 (x62~94)  저천장 통로     : dash·glide (2칸씩 내려가는 4칸 구덩이)
- *                   또는 위층       : grip 으로 9칸 벽면 등반
- *
- * 결과: 단독으로 전 구간을 여는 능력이 없다. jump2 는 구간3 에서 막힌다. */
-typedef struct { short x, y, w, h; unsigned char t; } Box;
-
-static const Box BOXES[] = {
-    /* 테두리 */
-    {  0,  0, 96,  1, T_SOLID },      /* 천장 */
-    {  0,  0,  1, 18, T_SOLID },      /* 왼쪽 벽 */
-    { 95,  0,  1, 18, T_SOLID },      /* 오른쪽 벽 */
-
-    /* ── 구간 1 ── */
-    {  1, 15, 31,  3, T_SOLID },      /* 바닥 */
-    { 13, 12,  2,  1, T_SOLID },      /* 발판 (바닥에서 3칸) */
-    { 16,  9,  2,  1, T_SOLID },      /* 발판 (3칸) */
-    { 19,  6,  3,  9, T_SOLID },      /* 장벽. 꼭대기는 바닥에서 9칸 */
-
-    /* ── 구간 2 ── */
-    { 32, 15,  7,  3, T_SOLID },
-    { 45, 15,  6,  3, T_SOLID },      /* 구덩이 x39~44 (6칸) */
-    { 57, 15,  5,  3, T_SOLID },      /* 구덩이 x51~56 (6칸) */
-
-    /* ── 구간 3 ──
-     * 위층 덩어리의 아랫면이 row12 까지 내려와야 한다.
-     * 그래야 바닥에서 점프(2.4칸)했을 때 손이 벽면에 닿아 grip 등반을 시작할 수 있다.
-     * row10 까지만 내려오면 4칸이라 안 닿고, 위층 루트가 통째로 막힌다. */
-    { 62,  6, 29,  7, T_SOLID },      /* 위층 x62~90, row6~12. 왼쪽 면이 등반 대상 */
-    { 62, 15,  6,  3, T_SOLID },      /* 통로 바닥 (표면 row15) — 머리 위 여유 2칸 */
-    { 72, 17, 23,  1, T_SOLID },      /* 구덩이 x68~71 을 건넌 뒤의 바닥 (2칸 아래) */
-    { 72, 14, 19,  1, T_SOLID },      /* 낮은 천장 → 여기도 여유 2칸 */
-
-    /* 터미널 — 여기서만 로드아웃을 바꿀 수 있다 */
-    {  2, 14,  1,  1, T_TERMINAL },
-    { 29, 14,  1,  1, T_TERMINAL },
-    { 58, 14,  1,  1, T_TERMINAL },
-
-    { 93, 16,  1,  1, T_GOAL },
-};
-
 void tune_defaults(Tune *t)
 {
     t->gravity        = 900.0f;
@@ -80,8 +30,9 @@ void tune_defaults(Tune *t)
     t->gripJumpY      = -250.0f;
     t->gripStick      = 0.12f;
     t->bootMult       = 1.20f;
-    t->formatSpeed    = 34.0f;
     t->formatLead     = 200.0f;
+    t->formatScale    = 1.00f;
+    t->msgTime        = 4.00f;
 }
 
 int tune_set(Tune *t, const char *key, float v)
@@ -92,10 +43,12 @@ int tune_set(Tune *t, const char *key, float v)
     K(coyoteTime) K(jumpBuffer)
     K(jump2Mult) K(dashSpeed) K(dashTime) K(dashCooldown)
     K(glideFall) K(gripSlide) K(gripJumpX) K(gripJumpY) K(gripStick) K(bootMult)
-    K(formatSpeed) K(formatLead)
+    K(formatLead) K(formatScale) K(msgTime)
 #undef K
     return 0;
 }
+
+const Level *sim_level(const World *w) { return &LEVELS[w->levelIndex]; }
 
 /* ── 맵 ─────────────────────────────────────────────────────────────── */
 
@@ -138,40 +91,47 @@ int sim_used_slots(const World *w)
 }
 int sim_free_slots(const World *w) { return CAP_SLOTS - sim_used_slots(w); }
 
-/* ── 초기화 ─────────────────────────────────────────────────────────── */
-
-static void build_map(World *w)
+/* 이 터미널에 그 유틸리티가 남아 있는가. avail 0 이면 전부 있다. */
+int sim_ability_available(const World *w, int ab)
 {
-    memset(w->map, T_EMPTY, sizeof(w->map));
-    for (unsigned i = 0; i < sizeof(BOXES) / sizeof(BOXES[0]); i++) {
-        const Box *b = &BOXES[i];
-        for (int r = b->y; r < b->y + b->h; r++)
-            for (int c = b->x; c < b->x + b->w; c++)
-                if (r >= 0 && r < MAP_H && c >= 0 && c < MAP_W) w->map[r][c] = b->t;
-    }
+    if (!w->atTerminal) return 0;
+    if (w->avail == 0) return 1;
+    return (w->avail & (1u << ab)) != 0;
 }
 
-void sim_init(World *w)
+/* ── 로드 ───────────────────────────────────────────────────────────── */
+
+void sim_load(World *w, const Tune *t, int levelIndex)
 {
     int deaths = w->deaths;
     int has[AB_COUNT];
-    memcpy(has, w->p.has, sizeof(has));
+    memcpy(has, w->p.has, sizeof(has));   /* 로드아웃은 스테이지를 넘어 유지된다 */
 
     memset(w, 0, sizeof(*w));
     w->deaths = deaths;
     memcpy(w->p.has, has, sizeof(has));
+    w->levelIndex = levelIndex;
 
-    build_map(w);
-    w->spawnX = 2 * TILE + 2.0f;
-    w->spawnY = 15 * TILE - PLAYER_H;
+    const Level *L = &LEVELS[levelIndex];
+    for (int i = 0; i < L->boxCount; i++) {
+        const Box *b = &L->boxes[i];
+        for (int r = b->y; r < b->y + b->h; r++)
+            for (int c = b->x; c < b->x + b->w; c++)
+                if (r >= 0 && r < MAP_H && c >= 0 && c < MAP_W) w->map[r][c] = b->t;
+    }
+    for (int i = 0; i < L->termCount; i++)
+        w->map[L->terms[i].y][L->terms[i].x] = T_TERMINAL;
+    w->map[L->goalRow][L->goalCol] = T_GOAL;
+
+    w->spawnX = L->spawnCol * (float)TILE + 2.0f;
+    w->spawnY = L->spawnRow * (float)TILE - PLAYER_H;
     w->p.x = w->spawnX;
     w->p.y = w->spawnY;
     w->p.facing = 1;
-    w->formatX = w->spawnX - 400.0f;
+    w->formatX = w->spawnX - t->formatLead * 2.0f;
     w->state = ST_PLAY;
 }
 
-/* 죽으면 마지막 터미널에서 다시 시작한다 (맵과 로드아웃은 유지) */
 static void respawn(World *w, const Tune *t)
 {
     Player *p = &w->p;
@@ -221,19 +181,23 @@ static void move_y(World *w, float dy)
 void sim_step(World *w, const Tune *t, const Input *in, float dt)
 {
     Player *p = &w->p;
+    const Level *L = sim_level(w);
 
     w->evJump = w->evDoubleJump = w->evDash = w->evWallJump = 0;
-    w->evLand = w->evDeny = w->evEquip = w->evCheckpoint = 0;
+    w->evLand = w->evDeny = w->evEquip = w->evCheckpoint = w->evDeath = 0;
     if (w->denyFlash  > 0) w->denyFlash  -= dt;
     if (w->checkFlash > 0) w->checkFlash -= dt;
+    if (w->msgTimer   > 0) w->msgTimer   -= dt;
 
-    /* 로드아웃 — 터미널 위에서만. 이 잠금이 전략을 만든다. */
+    /* 로드아웃 — 터미널 위에서, 그 터미널에 남아 있는 유틸리티만 */
     if (in->toggleAbility >= 0 && in->toggleAbility < AB_COUNT) {
         int ab = in->toggleAbility;
-        if (!w->atTerminal && w->state == ST_PLAY) {
-            w->evDeny = 1; w->denyFlash = 0.5f;          /* 여기선 못 바꾼다 */
+        if (!w->atTerminal) {
+            w->evDeny = 1; w->denyFlash = 0.5f;
         } else if (p->has[ab]) {
-            p->has[ab] = 0; w->evEquip = 1;
+            p->has[ab] = 0; w->evEquip = 1;              /* 빼는 건 언제나 가능 */
+        } else if (!sim_ability_available(w, ab)) {
+            w->evDeny = 1; w->denyFlash = 0.5f;          /* 이 섹터엔 없다 */
         } else if (sim_free_slots(w) >= ABILITY_COST[ab]) {
             p->has[ab] = 1; w->evEquip = 1;
         } else {
@@ -332,30 +296,47 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         p->airJumps = p->has[AB_JUMP2] ? 1 : 0;
     }
 
-    /* ── 터미널 ── 밟으면 안전 + 체크포인트 + 로드아웃 해금 ── */
+    /* ── 터미널 ── */
     int tr, tc;
     w->atTerminal = touches(w, T_TERMINAL, &tr, &tc);
     if (w->atTerminal) {
+        w->avail = 0;
+        for (int i = 0; i < L->termCount; i++)
+            if (L->terms[i].x == tc && L->terms[i].y == tr) w->avail = L->terms[i].avail;
+
         float tx = tc * (float)TILE + 2.0f;
         if (fabsf(tx - w->spawnX) > 1.0f) {
             w->spawnX = tx;
             w->spawnY = (float)(tr * TILE) + (TILE - PLAYER_H);
-            w->terminalsSeen++;
-            w->evCheckpoint = 1; w->checkFlash = 1.0f;
+            w->evCheckpoint = 1; w->checkFlash = 1.2f;
         }
-        /* 터미널 위에서는 포맷이 멈추고, 뒤로 물러나 있는다 */
         float want = p->x - t->formatLead;
         if (w->formatX > want) w->formatX = want;
     } else {
-        w->formatX += t->formatSpeed * dt;
+        w->formatX += L->formatSpeed * t->formatScale * dt;
     }
 
-    /* ── 포맷 파동 / 낙사 ── */
+    /* ── 안내 문구 — 구간에 처음 들어올 때 한 번 ── */
+    {
+        int col = (int)((p->x + PLAYER_W * 0.5f) / TILE);
+        for (int i = 0; i < L->msgCount && i < 32; i++) {
+            if (w->msgShown & (1u << i)) continue;
+            if (col >= L->msgs[i].x0 && col <= L->msgs[i].x1) {
+                w->msgShown |= (1u << i);
+                w->msgL1 = L->msgs[i].l1;
+                w->msgL2 = L->msgs[i].l2;
+                w->msgTimer = t->msgTime;
+                break;
+            }
+        }
+    }
+
+    /* ── 사망 / 클리어 ── */
     if (p->x < w->formatX || p->y > VIEW_H + TILE) {
         w->deaths++;
+        w->evDeath = 1;
         respawn(w, t);
         return;
     }
-
     if (touches(w, T_GOAL, 0, 0)) w->state = ST_WON;
 }
