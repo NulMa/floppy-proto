@@ -60,7 +60,8 @@ static const Box L02_BOX[] = {
     { 32, 15, 10,  3, T_SOLID },
     { 37, 14,  2,  1, T_SPIKE },
     { 42, 17,  6,  1, T_SPIKE },      /* 6칸 구덩이 — dash */
-    { 48, 15, 11,  3, T_SOLID },
+    /* 轉: 마지막 착지가 2칸 높다. 대시만으로는 안 되고 점프를 겹쳐야 한다 */
+    { 48, 13, 11,  5, T_SOLID },
 };
 static const TermSpec L02_TERM[] = { { 3, 14, 0 }, { 34, 14, 0 } };
 static const HintSpec L02_HINT[] = {
@@ -68,8 +69,9 @@ static const HintSpec L02_HINT[] = {
     { 13, 10, "1",     "boot.exe",       "gets you up" },
     { 26, 12, "SHIFT", "dash.exe",       "gets you across" },
     { 37, 11, 0,       "SPIKES",         0 },
-    { 54, 11, 0,       "CONFIG.SYS",     0 },
-    { 57, 12, 0,       "DRIVE SLOT",     0 },
+    { 44, 11, 0,       "THIS ONE LANDS HIGH", "jump and dash together" },
+    { 54,  9, 0,       "CONFIG.SYS",     0 },
+    { 57, 10, 0,       "DRIVE SLOT",     0 },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -88,8 +90,12 @@ static const Box L03_BOX[] = {
     { 26, 15,  8,  3, T_SOLID },
     { 34, 17,  4,  1, T_SPIKE },
     { 38, 15,  8,  3, T_SOLID },
-    { 46, 17,  4,  1, T_SPIKE },
-    { 50, 15, 13,  3, T_SOLID },
+    /* 轉: 마지막은 한 번에 못 건넌다. 중간에 얇은 발판을 밟고 대시를 두 번 —
+     * 거리가 아니라 **쿨다운 타이밍**이 문제가 된다 */
+    { 46, 17,  3,  1, T_SPIKE },
+    { 49, 15,  2,  1, T_ONEWAY },
+    { 51, 17,  3,  1, T_SPIKE },
+    { 54, 15,  9,  3, T_SOLID },
 };
 static const TermSpec L03_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 } };
 static const HintSpec L03_HINT[] = {
@@ -121,7 +127,10 @@ static const Box L04_BOX[] = {
     { 28, 17,  9,  1, T_SPIKE },
     { 37, 14,  9,  2, T_SOLID },      /* 표면 row14 (5칸 하강, 9칸 구덩이) */
     { 46, 17,  5,  1, T_SPIKE },
-    { 51, 17, 20,  1, T_SOLID },      /* 표면 row17 (3칸 하강, 5칸 — 여긴 쉽게) */
+    /* 轉: 마지막 착지가 3칸뿐이다. 거리가 아니라 **멈추는 정확도**가 문제 */
+    { 51, 17,  3,  1, T_SOLID },
+    { 54, 17,  4,  1, T_SPIKE },
+    { 58, 17, 13,  1, T_SOLID },
 };
 static const TermSpec L04_TERM[] = { { 3, 3, 0 }, { 21, 8, 0 }, { 39, 13, 0 } };
 static const HintSpec L04_HINT[] = {
@@ -290,8 +299,10 @@ static const Box L10_BOX[] = {
     { 21, 15, 12,  3, T_SOLID },
     { 33, 17,  6,  1, T_SPIKE },
     { 39, 15, 12,  3, T_SOLID },
-    { 51, 17,  6,  1, T_SPIKE },
-    { 57, 15, 14,  3, T_SOLID },
+    /* 轉: 마지막 구덩이는 7칸이다. 여기선 **네가 아니라 레벨이 속도를 준다** */
+    { 49, 15,  1,  1, T_PAD },
+    { 51, 17,  7,  1, T_SPIKE },
+    { 58, 15, 13,  3, T_SOLID },
     { 27, 14,  2,  1, T_SPIKE },
     { 41, 14,  2,  1, T_SPIKE },      /* 터미널(x45)과 겹치지 않게 떨어뜨린다 */
 };
@@ -467,13 +478,18 @@ static const Box L16_BOX[] = {
     { 55, 15, 10,  3, T_SOLID },
     { 65, 17,  4,  1, T_SPIKE },
     { 69, 15, 18,  3, T_SOLID },
+    /* 轉: 천장이 끝나고 6칸 벽이 나온다. 60칸 내내 못 뛰게 해놓고
+     * 마지막에 **점프로는 안 되는 벽**을 세운다 — 적응한 규칙이 뒤집힌다 */
+    { 76,  9,  2,  9, T_SOLID },
+    { 78,  9,  9,  2, T_SOLID },
 };
-static const TermSpec L16_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 58, 14, 0 } };
+static const TermSpec L16_TERM[] = { { 3, 14, 0 }, { 30, 14, 0 }, { 58, 14, 0 }, { 73, 14, 0 } };
 static const HintSpec L16_HINT[] = {
-    {  3, 12, 0,       "60 TILES OF LOW CEILING", "the format is at 52" },
-    { 23, 11, "SHIFT", "dash.exe",                "four gaps, no jumping" },
-    { 82, 12, 0,       "CRASH.LOG",               "the last thing it wrote" },
-    { 85, 13, 0,       "DRIVE SLOT",              0 },
+    {  3, 12, 0,       "60 TILES OF LOW CEILING", "no jumping in there" },
+    { 23, 11, "SHIFT", "dash.exe",                "four gaps" },
+    { 74, 12, "4",     "THE CEILING ENDS",        "and now you have to climb" },
+    { 81,  6, 0,       "CRASH.LOG",               "the last thing it wrote" },
+    { 84,  7, 0,       "DRIVE SLOT",              0 },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -632,35 +648,35 @@ const Level LEVELS[] = {
       L02_TERM, (int)(sizeof(L02_TERM)/sizeof(L02_TERM[0])),
       L02_HINT, (int)(sizeof(L02_HINT)/sizeof(L02_HINT[0])),
       0, AB(AB_BOOT) | AB(AB_DASH),
-      60, 2, 15,  57, 14,  54, 14,  26.0f },
+      60, 2, 15,  57, 12,  54, 12,  22.0f },
 
     { "s03", "SECTOR 03", "LETTER.TXT", "never sent", 4096,
       L03_BOX,  (int)(sizeof(L03_BOX) /sizeof(L03_BOX[0])),
       L03_TERM, (int)(sizeof(L03_TERM)/sizeof(L03_TERM[0])),
       L03_HINT, (int)(sizeof(L03_HINT)/sizeof(L03_HINT[0])),
       AB(AB_GLIDE), AB(AB_DASH),
-      64, 2, 15,  61, 14,  58, 14,  28.0f },
+      64, 2, 15,  61, 14,  58, 14,  30.0f },
 
     { "s04", "SECTOR 04", "SONG.MOD", "4 channels, 3:12", 61440,
       L04_BOX,  (int)(sizeof(L04_BOX) /sizeof(L04_BOX[0])),
       L04_TERM, (int)(sizeof(L04_TERM)/sizeof(L04_TERM[0])),
       L04_HINT, (int)(sizeof(L04_HINT)/sizeof(L04_HINT[0])),
       0, AB(AB_GLIDE),
-      72, 2, 4,  68, 16,  65, 16,  30.0f },
+      72, 2, 4,  68, 16,  65, 16,  26.0f },
 
     { "s05", "SECTOR 05", "PHOTO.PCX", "scanned from paper", 24576,
       L05_BOX,  (int)(sizeof(L05_BOX) /sizeof(L05_BOX[0])),
       L05_TERM, (int)(sizeof(L05_TERM)/sizeof(L05_TERM[0])),
       L05_HINT, (int)(sizeof(L05_HINT)/sizeof(L05_HINT[0])),
       AB(AB_GRIP), AB(AB_DASH) | AB(AB_GLIDE),
-      76, 2, 8,  71, 12,  68, 12,  30.0f },
+      76, 2, 8,  71, 12,  68, 12,  32.0f },
 
     { "s06", "SECTOR 06", "DIARY.TXT", "entries stop in march", 8192,
       L06_BOX,  (int)(sizeof(L06_BOX) /sizeof(L06_BOX[0])),
       L06_TERM, (int)(sizeof(L06_TERM)/sizeof(L06_TERM[0])),
       L06_HINT, (int)(sizeof(L06_HINT)/sizeof(L06_HINT[0])),
       0, AB(AB_GRIP),
-      56, 2, 15,  53, 14,  50, 14,  32.0f },
+      56, 2, 15,  53, 14,  50, 14,  28.0f },
 
     /* needs = 0 : 구간마다 길이 갈려서 **어느 한 능력도 필수가 아니다.**
      * (다만 구간2 평지 구덩이는 dash 가 사실상 유일한 답이다 — 아래 needs 에 넣어둔다) */
@@ -669,35 +685,35 @@ const Level LEVELS[] = {
       L07_TERM, (int)(sizeof(L07_TERM)/sizeof(L07_TERM[0])),
       L07_HINT, (int)(sizeof(L07_HINT)/sizeof(L07_HINT[0])),
       0, AB(AB_DASH),
-      96, 2, 15,  93, 16,  90, 16,  34.0f },
+      96, 2, 15,  93, 16,  90, 16,  36.0f },
 
     { "s08", "SECTOR 08", "THEME.MOD", "his favourite", 57344,
       L08_BOX,  (int)(sizeof(L08_BOX) /sizeof(L08_BOX[0])),
       L08_TERM, (int)(sizeof(L08_TERM)/sizeof(L08_TERM[0])),
       L08_HINT, (int)(sizeof(L08_HINT)/sizeof(L08_HINT[0])),
       AB(AB_JUMP2), AB(AB_BOOT) | AB(AB_GRIP),
-      60, 2, 15,  54, 2,  51, 2,  34.0f },
+      60, 2, 15,  54, 2,  51, 2,  40.0f },
 
     { "s09", "SECTOR 09", "SAVE02.DAT", "a later save, same game", 81920,
       L09_BOX,  (int)(sizeof(L09_BOX) /sizeof(L09_BOX[0])),
       L09_TERM, (int)(sizeof(L09_TERM)/sizeof(L09_TERM[0])),
       L09_HINT, (int)(sizeof(L09_HINT)/sizeof(L09_HINT[0])),
       0, AB(AB_JUMP2) | AB(AB_DASH),
-      68, 2, 15,  65, 6,  62, 6,  36.0f },
+      68, 2, 15,  65, 6,  62, 6,  30.0f },
 
     { "s10", "SECTOR 10", "README.1ST", "read me first", 2048,
       L10_BOX,  (int)(sizeof(L10_BOX) /sizeof(L10_BOX[0])),
       L10_TERM, (int)(sizeof(L10_TERM)/sizeof(L10_TERM[0])),
       L10_HINT, (int)(sizeof(L10_HINT)/sizeof(L10_HINT[0])),
       0, AB(AB_DASH),
-      72, 2, 15,  69, 14,  66, 14,  40.0f },   /* 속도 스테이지지만 48 은 어려운 티어보다 빨랐다 */
+      72, 2, 15,  69, 14,  66, 14,  44.0f },   /* 속도 스테이지지만 48 은 어려운 티어보다 빨랐다 */
 
     { "s11", "SECTOR 11", "NOTES.TXT", "half a sentence, then nothing", 3072,
       L11_BOX,  (int)(sizeof(L11_BOX) /sizeof(L11_BOX[0])),
       L11_TERM, (int)(sizeof(L11_TERM)/sizeof(L11_TERM[0])),
       L11_HINT, (int)(sizeof(L11_HINT)/sizeof(L11_HINT[0])),
       0, AB(AB_BOOT) | AB(AB_DASH),
-      72, 2, 15,  69, 14,  66, 14,  38.0f },
+      72, 2, 15,  69, 14,  66, 14,  34.0f },
 
     { "s12", "SECTOR 12", "TRACK02.MOD", "an unfinished loop", 45056,
       L12_BOX,  (int)(sizeof(L12_BOX) /sizeof(L12_BOX[0])),
@@ -711,49 +727,49 @@ const Level LEVELS[] = {
       L13_TERM, (int)(sizeof(L13_TERM)/sizeof(L13_TERM[0])),
       L13_HINT, (int)(sizeof(L13_HINT)/sizeof(L13_HINT[0])),
       0, AB(AB_BOOT),
-      72, 2, 15,  69, 14,  66, 14,  40.0f },
+      72, 2, 15,  69, 14,  66, 14,  36.0f },
 
     { "s14", "SECTOR 14", "BACKUP.ZIP", "everything, once", 131072,
       L14_BOX,  (int)(sizeof(L14_BOX) /sizeof(L14_BOX[0])),
       L14_TERM, (int)(sizeof(L14_TERM)/sizeof(L14_TERM[0])),
       L14_HINT, (int)(sizeof(L14_HINT)/sizeof(L14_HINT[0])),
       0, AB(AB_BOOT) | AB(AB_DASH),
-      96, 2, 15,  93, 14,  90, 14,  42.0f },
+      96, 2, 15,  93, 14,  90, 14,  46.0f },
 
     { "s15", "SECTOR 15", "INVOICE.TXT", "unpaid", 2560,
       L15_BOX,  (int)(sizeof(L15_BOX) /sizeof(L15_BOX[0])),
       L15_TERM, (int)(sizeof(L15_TERM)/sizeof(L15_TERM[0])),
       L15_HINT, (int)(sizeof(L15_HINT)/sizeof(L15_HINT[0])),
       0, AB(AB_DASH),
-      88, 2, 15,  84, 14,  78, 4,  44.0f },
+      88, 2, 15,  84, 14,  78, 4,  40.0f },
 
     { "s16", "SECTOR 16", "CRASH.LOG", "the last thing it wrote", 16384,
       L16_BOX,  (int)(sizeof(L16_BOX) /sizeof(L16_BOX[0])),
       L16_TERM, (int)(sizeof(L16_TERM)/sizeof(L16_TERM[0])),
       L16_HINT, (int)(sizeof(L16_HINT)/sizeof(L16_HINT[0])),
-      0, AB(AB_DASH),
-      88, 2, 15,  85, 14,  82, 14,  52.0f },
+      0, AB(AB_DASH) | AB(AB_GRIP),
+      88, 2, 15,  84, 8,  81, 8,  50.0f },
 
     { "s17", "SECTOR 17", "KERNEL.SYS", "the part that never crashed", 40960,
       L17_BOX,  (int)(sizeof(L17_BOX) /sizeof(L17_BOX[0])),
       L17_TERM, (int)(sizeof(L17_TERM)/sizeof(L17_TERM[0])),
       L17_HINT, (int)(sizeof(L17_HINT)/sizeof(L17_HINT[0])),
       0, AB(AB_GRIP),
-      80, 2, 15,  77, 14,  74, 14,  46.0f },
+      80, 2, 15,  77, 14,  74, 14,  44.0f },
 
     { "s18", "SECTOR 18", "LASTMAIL.TXT", "sent, no reply", 5120,
       L18_BOX,  (int)(sizeof(L18_BOX) /sizeof(L18_BOX[0])),
       L18_TERM, (int)(sizeof(L18_TERM)/sizeof(L18_TERM[0])),
       L18_HINT, (int)(sizeof(L18_HINT)/sizeof(L18_HINT[0])),
       0, AB(AB_DASH) | AB(AB_GRIP) | AB(AB_GLIDE),
-      96, 2, 15,  93, 14,  90, 14,  46.0f },
+      96, 2, 15,  93, 14,  90, 14,  48.0f },
 
     { "s19", "SECTOR 19", "GOODBYE.TXT", "one line, unfinished", 1024,
       L19_BOX,  (int)(sizeof(L19_BOX) /sizeof(L19_BOX[0])),
       L19_TERM, (int)(sizeof(L19_TERM)/sizeof(L19_TERM[0])),
       L19_HINT, (int)(sizeof(L19_HINT)/sizeof(L19_HINT[0])),
       0, AB(AB_DASH) | AB(AB_GRIP) | AB(AB_GLIDE),
-      96, 2, 15,  93, 14,  90, 14,  48.0f },
+      96, 2, 15,  93, 14,  90, 14,  52.0f },
 
     /* ★ 마지막 필드가 diskCost. 이 스테이지만 디스크가 9칸을 먹는다. */
     { "s20", "SECTOR 20", "ME.IMG", "the machine itself", 1474560,
@@ -761,7 +777,7 @@ const Level LEVELS[] = {
       L20_TERM, (int)(sizeof(L20_TERM)/sizeof(L20_TERM[0])),
       L20_HINT, (int)(sizeof(L20_HINT)/sizeof(L20_HINT[0])),
       0, AB(AB_DASH) | AB(AB_JUMP2),
-      90, 2, 15,  86, 14,  55, 14,  46.0f,  9 },
+      90, 2, 15,  86, 14,  55, 14,  40.0f,  9 },
 };
 
 const int LEVEL_COUNT = (int)(sizeof(LEVELS) / sizeof(LEVELS[0]));

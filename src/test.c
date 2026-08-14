@@ -55,7 +55,12 @@ static int widest_gap(const World *w, int rowFrom, int rowTo, int x0, int x1)
     int best = 0, run = 0;
     for (int c = x0; c <= x1; c++) {
         int floorHere = 0;
-        for (int r = rowFrom; r <= rowTo; r++) if (w->map[r][c] == T_SOLID) floorHere = 1;
+        for (int r = rowFrom; r <= rowTo; r++) {
+            unsigned char t = w->map[r][c];
+            /* 원웨이·점프패드도 밟을 수 있으니 바닥으로 센다.
+             * T_SOLID 만 보면 원웨이 섬을 구덩이로 잘못 잰다 */
+            if (t == T_SOLID || t == T_ONEWAY || t == T_PAD) floorHere = 1;
+        }
         if (!floorHere) { run++; if (run > best) best = run; }
         else run = 0;
     }
@@ -239,6 +244,35 @@ int main(void)
         if (n[0] && n[1] && n[2]) {
             check(sum[0] / n[0] < sum[1] / n[1], "쉬움 < 중간 (평균 파동 속도)");
             check(sum[1] / n[1] < sum[2] / n[2], "중간 < 어려움 (평균 파동 속도)");
+        }
+
+        /* ── 톱니 구조 ──
+         * 계단처럼 단조 상승하면 안 된다. 새 능력을 얻은 **직후 스테이지는
+         * 낮은 위험에서 그걸 소개**해야 하므로 압박을 떨어뜨린다.
+         * (Nintendo 4단 구성 / Celeste 챕터 구조의 공통 원칙) */
+        printf("\n  능력 도입 스테이지의 압박 하강\n");
+        for (int i = 1; i < LEVEL_COUNT; i++) {
+            if (LEVELS[i - 1].reward == 0) continue;
+            printf("    %s (%.0f) → %s (%.0f)  %s\n",
+                   LEVELS[i - 1].id, LEVELS[i - 1].formatSpeed,
+                   LEVELS[i].id, LEVELS[i].formatSpeed,
+                   LEVELS[i].formatSpeed <= LEVELS[i - 1].formatSpeed ? "내려감" : "<- 올라갔다");
+            snprintf(label, sizeof(label), "%s: 새 능력 도입 스테이지는 압박을 낮춘다", LEVELS[i].id);
+            check(LEVELS[i].formatSpeed <= LEVELS[i - 1].formatSpeed, label);
+        }
+
+        /* 티어 안에서도 최소 한 번은 내려가야 쉬는 구간이 생긴다 */
+        for (int k = 0; k < 3; k++) {
+            int lo = (k == 0) ? 0 : (k == 1 ? 5 : 15);
+            int hi = (k == 0) ? 5 : (k == 1 ? 15 : 20);
+            if (hi > LEVEL_COUNT) hi = LEVEL_COUNT;
+            int drops = 0;
+            for (int i = lo + 1; i < hi; i++)
+                if (LEVELS[i].formatSpeed < LEVELS[i - 1].formatSpeed) drops++;
+            if (hi - lo >= 3) {
+                snprintf(label, sizeof(label), "%s 티어 안에 쉬는 구간이 있다 (하강 %d회)", tn[k], drops);
+                check(drops >= 1, label);
+            }
         }
     }
 
