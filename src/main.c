@@ -3,6 +3,7 @@
  * 실행 인자:  --shot [x] [level]   30프레임 뒤 shot.png 를 남기고 종료 */
 #include "raylib.h"
 #include "sim.h"
+#include "progress.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -32,7 +33,19 @@ static const Color C_SPIKE = { 224,  92, 108, 255 };
 static const Color C_PAD   = { 250, 196,  86, 255 };
 static const Color C_EXIT  = { 120, 240, 180, 255 };
 
-typedef enum { SCR_TITLE = 0, SCR_PLAY, SCR_CLEAR, SCR_END } Screen;
+typedef enum { SCR_TITLE = 0, SCR_MENU, SCR_PLAY, SCR_CLEAR, SCR_END } Screen;
+
+#define SAVE_PATH "save.dat"
+
+/* 난이도 티어 — 스테이지 인덱스(0부터)로 판정한다.
+ *   s01~s05 쉬움 / s06~s15 중간 / s16~s20 어려움  */
+static int tier_of(int idx) { return (idx < 5) ? 0 : (idx < 15 ? 1 : 2); }
+static const char *TIER_NAME[3] = { "EASY", "MEDIUM", "HARD" };
+static const Color TIER_COLOR[3] = {
+    { 120, 220, 150, 255 },   /* easy   */
+    { 240, 190,  90, 255 },   /* medium */
+    { 236, 110, 110, 255 },   /* hard   */
+};
 
 /* ── tune.txt ───────────────────────────────────────────────────────── */
 static int load_tune(Tune *t, const char *path, char *msg, int n)
@@ -402,6 +415,77 @@ static void draw_title(float t)
     center("a floppy has one job left", VIEW_H - 40, 10, (Color){ 60, 68, 92, 255 });
 }
 
+/* ── 스테이지 선택 ──────────────────────────────────────────────────── */
+#define MENU_COLS 5
+
+static void draw_menu(const Progress *pr, int sel, float t)
+{
+    char buf[64];
+    ClearBackground(C_BG);
+    for (int i = 0; i < VIEW_H; i += 4)
+        DrawRectangle(0, i, VIEW_W, 1, (Color){ 14, 18, 32, 255 });
+
+    center("SELECT SECTOR", 14, 20, C_GOAL);
+
+    int rows = (LEVEL_COUNT + MENU_COLS - 1) / MENU_COLS;
+    int cw = 88, ch = 40, gx = 4, gy = 6;
+    int gridW = MENU_COLS * cw + (MENU_COLS - 1) * gx;
+    int x0 = (VIEW_W - gridW) / 2, y0 = 46;
+
+    for (int i = 0; i < LEVEL_COUNT && i < MAX_STAGES; i++) {
+        int r = i / MENU_COLS, c = i % MENU_COLS;
+        int x = x0 + c * (cw + gx), y = y0 + r * (ch + gy);
+        int open = (i <= pr->reached);
+        int done = pr->cleared[i];
+        Color tc = TIER_COLOR[tier_of(i)];
+
+        Color border = open ? (done ? tc : Fade(tc, 0.55f)) : (Color){ 34, 40, 58, 255 };
+        Color fill   = (i == sel) ? Fade(tc, 0.18f) : (Color){ 13, 17, 28, 255 };
+        DrawRectangle(x, y, cw, ch, fill);
+        DrawRectangleLines(x, y, cw, ch, border);
+        if (i == sel) {
+            float pulse = 0.55f + 0.45f * (float)((int)(t * 4) % 2);
+            DrawRectangleLines(x - 1, y - 1, cw + 2, ch + 2, Fade(tc, pulse));
+        }
+
+        snprintf(buf, sizeof(buf), "%02d", i + 1);
+        DrawText(buf, x + 6, y + 5, 20, open ? (done ? tc : C_TEXT) : (Color){ 46, 54, 76, 255 });
+
+        if (!open) {
+            DrawText("LOCKED", x + 32, y + 11, 10, (Color){ 46, 54, 76, 255 });
+            continue;
+        }
+        if (done) {
+            snprintf(buf, sizeof(buf), "%.1fs", pr->best[i]);
+            DrawText(buf, x + 32, y + 8, 10, C_TEXT);
+            if (pr->diskGot[i]) {
+                DrawRectangle(x + cw - 16, y + 7, 10, 10, C_GOAL);
+                DrawRectangle(x + cw - 14, y + 12, 6, 4, (Color){ 226, 226, 214, 255 });
+            } else {
+                DrawRectangleLines(x + cw - 16, y + 7, 10, 10, (Color){ 70, 84, 110, 255 });
+            }
+        } else {
+            DrawText("NEW", x + 32, y + 8, 10, tc);
+        }
+        DrawText(LEVELS[i].file, x + 6, y + 27, 10, done ? C_DIM : (Color){ 58, 68, 92, 255 });
+    }
+
+    /* 티어 범례 */
+    int ly = y0 + rows * (ch + gy) + 6;
+    int lx = x0;
+    for (int k = 0; k < 3; k++) {
+        DrawRectangle(lx, ly + 2, 6, 6, TIER_COLOR[k]);
+        DrawText(TIER_NAME[k], lx + 10, ly, 10, C_DIM);
+        lx += 12 + MeasureText(TIER_NAME[k], 10) + 14;
+    }
+    snprintf(buf, sizeof(buf), "%d/%d cleared    %d disks    %d retries",
+             progress_total_cleared(pr, LEVEL_COUNT), LEVEL_COUNT,
+             progress_total_disks(pr, LEVEL_COUNT), pr->deaths);
+    DrawText(buf, VIEW_W - MeasureText(buf, 10) - x0, ly, 10, C_DIM);
+
+    center("[ARROWS] select    [ENTER] load    [ESC] title", VIEW_H - 20, 10, C_DIM);
+}
+
 static void draw_clear(const World *w, unsigned gained)
 {
     const Level *L = sim_level(w);
@@ -443,26 +527,35 @@ static void draw_clear(const World *w, unsigned gained)
     center("[ENTER]  next sector", VIEW_H - 46, 10, C_TEXT);
 }
 
-static void draw_end(const World *w, int recovered, long bytes)
+static void draw_end(const World *w, const Progress *pr)
 {
     char buf[96], num[32];
+    long bytes = 0;
+    for (int i = 0; i < LEVEL_COUNT && i < MAX_STAGES; i++)
+        if (pr->diskGot[i]) bytes += LEVELS[i].fileBytes;
+    float total = 0.0f;
+    for (int i = 0; i < LEVEL_COUNT && i < MAX_STAGES; i++) total += pr->best[i];
+
     ClearBackground(C_BG);
-    DrawText("A:\\> _", 40, 60, 20, C_GOAL);
-    snprintf(buf, sizeof(buf), "%d files recovered", recovered);
-    DrawText(buf, 56, 110, 10, C_TEXT);
+    DrawText("A:\\> _", 40, 56, 20, C_GOAL);
+    snprintf(buf, sizeof(buf), "%d of %d files recovered",
+             progress_total_disks(pr, LEVEL_COUNT), LEVEL_COUNT);
+    DrawText(buf, 56, 106, 10, C_TEXT);
     commas(bytes, num, sizeof(num));
     snprintf(buf, sizeof(buf), "%s bytes written", num);
-    DrawText(buf, 56, 126, 10, C_TEXT);
-    snprintf(buf, sizeof(buf), "%d retries", w->deaths);
-    DrawText(buf, 56, 142, 10, C_DIM);
-    DrawText("disk ejected.", 56, 174, 10, C_DIM);
-    center("[ENTER]  again", VIEW_H - 40, 10, C_DIM);
+    DrawText(buf, 56, 122, 10, C_TEXT);
+    snprintf(buf, sizeof(buf), "%.1f seconds total     %d retries", total, pr->deaths);
+    DrawText(buf, 56, 138, 10, C_DIM);
+    DrawText("disk ejected.", 56, 170, 10, C_DIM);
+    center("[ENTER]  back to sectors", VIEW_H - 40, 10, C_DIM);
+    (void)w;
 }
 
 /* ── main ───────────────────────────────────────────────────────────── */
 int main(int argc, char **argv)
 {
     int shotMode = (argc > 1 && strcmp(argv[1], "--shot") == 0);
+    int shotMenu = (argc > 1 && strcmp(argv[1], "--shotmenu") == 0);
     int shotTile = (argc > 2) ? atoi(argv[2]) : -1;
     int shotLvl  = (argc > 3) ? atoi(argv[3]) : 0;
 
@@ -472,24 +565,41 @@ int main(int argc, char **argv)
     float toastTimer = 0.0f;
     load_tune(&tune, "tune.txt", toast, sizeof(toast));
 
+    Progress prog;
+    progress_reset(&prog, AB_STARTING);
+    progress_load(&prog, SAVE_PATH);
+
     World world;
     sim_new_game(&world, &tune);
+    world.unlocked = prog.unlocked;
     if (shotMode && shotLvl > 0) {
         /* 스크린샷용: 그 레벨까지의 보상을 미리 지급한다 */
         for (int i = 0; i < shotLvl && i < LEVEL_COUNT; i++) world.unlocked |= LEVELS[i].reward;
         sim_load(&world, &tune, shotLvl);
     }
 
-    Screen screen = shotMode ? SCR_PLAY : SCR_TITLE;
-    int  recovered = 0;
-    long bytesSaved = 0;
+    Screen screen = shotMode ? SCR_PLAY : (shotMenu ? SCR_MENU : SCR_TITLE);
+    int  menuSel = prog.reached;
     unsigned gained = 0;
+    int quit = 0;
+
+    if (shotMenu) {
+        /* 메뉴 확인용 가짜 진행 상태 — 저장하지 않는다 */
+        for (int i = 0; i < LEVEL_COUNT && i < 7; i++) {
+            prog.cleared[i] = 1;
+            prog.best[i] = 11.0f + i * 3.7f;
+            if (i % 3 != 1) prog.diskGot[i] = 1;
+        }
+        prog.reached = (LEVEL_COUNT > 7) ? 7 : LEVEL_COUNT - 1;
+        prog.deaths = 23;
+        menuSel = prog.reached;
+    }
 
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(VIEW_W * 2, VIEW_H * 2, "LAST WRITE");
     SetTargetFPS(60);
-    SetExitKey(KEY_ESCAPE);
+    SetExitKey(KEY_NULL);   /* ESC 는 화면별로 처리한다 (플레이 → 메뉴 → 타이틀 → 종료) */
 
     int mh = GetMonitorHeight(GetCurrentMonitor());
     int scale = (mh > 0) ? (mh - 140) / VIEW_H : 2;
@@ -507,31 +617,50 @@ int main(int argc, char **argv)
     }
 
     int frames = 0;
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose() && !quit) {
         float dt = 1.0f / 60.0f;
         int enter = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER);
 
         if (IsKeyPressed(KEY_F5)) { load_tune(&tune, "tune.txt", toast, sizeof(toast)); toastTimer = 2.5f; }
         if (toastTimer > 0) toastTimer -= dt;
 
+        int esc = IsKeyPressed(KEY_ESCAPE);
+
         if (screen == SCR_TITLE) {
-            if (enter) { recovered = 0; bytesSaved = 0; gained = 0;
-                         sim_new_game(&world, &tune); screen = SCR_PLAY; }
+            if (esc) quit = 1;
+            if (enter) { menuSel = prog.reached; screen = SCR_MENU; }
+        } else if (screen == SCR_MENU) {
+            if (esc) screen = SCR_TITLE;
+            if (IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A)) menuSel--;
+            if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) menuSel++;
+            if (IsKeyPressed(KEY_UP))   menuSel -= MENU_COLS;
+            if (IsKeyPressed(KEY_DOWN)) menuSel += MENU_COLS;
+            if (menuSel < 0) menuSel = 0;
+            if (menuSel >= LEVEL_COUNT) menuSel = LEVEL_COUNT - 1;
+
+            if (enter && menuSel <= prog.reached) {
+                world.unlocked = prog.unlocked;   /* 세이브가 원본이다 */
+                sim_load(&world, &tune, menuSel);
+                gained = 0;
+                screen = SCR_PLAY;
+            }
         } else if (screen == SCR_CLEAR) {
             /* 디스크를 놓쳤으면 되돌아갈 수 있게 한다 — 진행이 막히면 안 된다 */
             if (IsKeyPressed(KEY_R)) {
+                world.unlocked = prog.unlocked;
                 sim_load(&world, &tune, world.levelIndex);
                 gained = 0;
                 screen = SCR_PLAY;
-            } else if (enter) {
-                if (world.levelIndex + 1 < LEVEL_COUNT) {
-                    sim_load(&world, &tune, world.levelIndex + 1);
-                    screen = SCR_PLAY;
-                } else screen = SCR_END;
+            } else if (enter || esc) {
+                menuSel = world.levelIndex;
+                if (menuSel + 1 < LEVEL_COUNT && prog.cleared[menuSel]) menuSel++;
+                screen = (progress_total_cleared(&prog, LEVEL_COUNT) >= LEVEL_COUNT)
+                       ? SCR_END : SCR_MENU;
             }
         } else if (screen == SCR_END) {
-            if (enter) screen = SCR_TITLE;
+            if (enter || esc) { menuSel = prog.reached; screen = SCR_MENU; }
         } else {
+            if (esc) { menuSel = world.levelIndex; screen = SCR_MENU; }
             Input in;
             memset(&in, 0, sizeof(in));
             in.toggleAbility = -1;
@@ -548,11 +677,11 @@ int main(int argc, char **argv)
             sim_step(&world, &tune, &in, dt);
 
             if (world.state == ST_WON) {
-                if (world.hasDisk) {                 /* 디스크를 실제로 주웠을 때만 집계 */
-                    recovered++;
-                    bytesSaved += sim_level(&world)->fileBytes;
-                }
                 gained = sim_grant_reward(&world);   /* 디스크 안에 들어 있던 유틸리티 */
+                prog.unlocked = world.unlocked;
+                prog.deaths  += world.deaths;
+                progress_record(&prog, world.levelIndex, world.hasDisk, world.time, LEVEL_COUNT);
+                progress_save(&prog, SAVE_PATH);
                 screen = SCR_CLEAR;
             }
         }
@@ -566,7 +695,8 @@ int main(int argc, char **argv)
 
         BeginTextureMode(canvas);
             if (screen == SCR_TITLE)     draw_title((float)GetTime());
-            else if (screen == SCR_END)  draw_end(&world, recovered, bytesSaved);
+            else if (screen == SCR_MENU) draw_menu(&prog, menuSel, (float)GetTime());
+            else if (screen == SCR_END)  draw_end(&world, &prog);
             else {
                 draw_world(&world, (float)GetTime(), camX);
                 draw_hints(&world, camX);
@@ -582,7 +712,7 @@ int main(int argc, char **argv)
             DrawTexturePro(canvas.texture, src, dst, (Vector2){ 0, 0 }, 0.0f, WHITE);
         EndDrawing();
 
-        if (shotMode && ++frames >= 30) { TakeScreenshot("shot.png"); break; }
+        if ((shotMode || shotMenu) && ++frames >= 30) { TakeScreenshot("shot.png"); break; }
     }
 
     UnloadRenderTexture(canvas);
