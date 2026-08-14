@@ -6,7 +6,7 @@
 /* ══════════════════════════════════════════════════════════════════════
  *  SECTOR 00 — AUTOEXEC.BAT  (튜토리얼)
  *
- *  가르치는 것은 넷뿐이다. 한 번에 하나씩, 텍스트는 최소로.
+ *  가르치는 것은 넷뿐이다. 한 번에 하나씩.
  *    ① 이동·점프        평지 + 1칸 계단 + 2칸 구덩이 (전부 맨몸으로 됨)
  *    ② 포맷 파동        느리게 쫓아온다. "오른쪽으로 계속 가라"
  *    ③ 터미널           밟으면 파동이 멈춘다 = 안전. 여기서만 유틸리티를 로드
@@ -36,17 +36,24 @@ static const TermSpec S00_TERMS[] = {
     { 17, 14, 0 },      /* 턱 바로 앞 — 여기서 boot 를 켜고 넘는다 */
 };
 
-static const MsgSpec S00_MSGS[] = {
-    {  1,  4, "ARROWS TO MOVE", "SPACE TO JUMP" },
-    {  7,  9, "FORMAT IN PROGRESS", "KEEP MOVING RIGHT" },
-    { 17, 18, "THAT LEDGE IS TOO HIGH", "LOAD boot.exe HERE  [5]" },
-    { 38, 40, "AUTOEXEC.BAT", "the file this machine read first" },
+/* 힌트는 위치에 붙어서 가까이 있는 동안 계속 떠 있는다.
+ * 기본 이동부터 하나씩 — 놓쳐도 돌아오면 다시 보인다. */
+/* 앵커 높이를 엇갈리게 둔다. 가까운 힌트가 같은 높이에 있으면 서로 가린다.
+ * (렌더 쪽에서도 가장 가까운 2개만 그리도록 제한하고 있다) */
+static const HintSpec S00_HINTS[] = {
+    {  2, 14, 3, "< >",   "MOVE",              0 },
+    {  5, 10, 3, 0,       "TERMINAL",          "the format stops here" },
+    {  9, 14, 3, "SPACE", "JUMP",              "hold longer to go higher" },
+    { 12, 10, 3, 0,       "FORMAT IS COMING",  "keep moving right" },
+    { 15, 14, 3, "SPACE", "JUMP ACROSS",       0 },
+    { 17, 10, 3, "5",     "LOAD boot.exe",     "you cannot climb without it" },
+    { 21,  8, 4, 0,       "3 TILES UP",        "a bare jump reaches 2" },
+    { 42, 13, 5, 0,       "AUTOEXEC.BAT",      "the file this machine read first" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
  *  SECTOR 01 — SAVE01.DAT
  *
- *  여기서 "전부 못 들고 간다"를 가르친다. 능력 5종 20칸 / 용량 12칸.
  *  구간마다 **서로 다른 능력으로 가는 두 갈래 길**이 있다.
  *
  *    구간1 (x1~31)   세로 장벽 9칸    : grip 직등 / boot·jump2 로 3칸 발판
@@ -57,6 +64,9 @@ static const MsgSpec S00_MSGS[] = {
  *  ★ 불변식: 단독으로 전 구간을 여는 능력이 없어야 한다. test.bat 이 검사한다.
  *    jump2 는 높이(4.4칸)도 거리(8.9칸)도 1위라, 구간3 저천장(도달 2.2칸)이
  *    유일한 차단 수단이다. 이 구조를 깨면 로드아웃 선택이 무의미해진다.
+ *
+ *  다만 s01 진입 시점에 손에 있는 건 boot + dash 뿐이다.
+ *  지형은 5종 전부를 상정하고 짜여 있어서, 나중에 grip 을 얻고 재방문하면 다른 길이 열린다.
  * ══════════════════════════════════════════════════════════════════════ */
 static const Box S01_BOXES[] = {
     {  0,  0, 96,  1, T_SOLID },
@@ -88,10 +98,12 @@ static const TermSpec S01_TERMS[] = {
     { 58, 14, 0 },
 };
 
-static const MsgSpec S01_MSGS[] = {
-    {  1,  4, "TWO UTILITIES NOW", "SWAP THEM AT TERMINALS" },
-    { 27, 30, "BOOT GETS YOU UP", "DASH GETS YOU ACROSS" },
-    { 60, 63, "LOW CEILING BELOW", "JUMPING WILL NOT HELP HERE" },
+static const HintSpec S01_HINTS[] = {
+    {  2, 13, 4, "1-5",   "TWO UTILITIES NOW", "swap them at any terminal" },
+    { 13, 11, 3, 0,       "boot.exe",          "gets you up here" },
+    { 29, 13, 4, "SHIFT", "dash.exe",          "gets you across" },
+    { 58, 13, 4, 0,       "LOW CEILING AHEAD", "jumping will not help there" },
+    { 93, 15, 5, 0,       "SAVE01.DAT",        "someone did not finish this" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════ */
@@ -109,7 +121,7 @@ const Level LEVELS[] = {
         "s00", "SECTOR 00", "AUTOEXEC.BAT", "the file this machine read first", 512,
         S00_BOXES, (int)(sizeof(S00_BOXES) / sizeof(S00_BOXES[0])),
         S00_TERMS, (int)(sizeof(S00_TERMS) / sizeof(S00_TERMS[0])),
-        S00_MSGS,  (int)(sizeof(S00_MSGS)  / sizeof(S00_MSGS[0])),
+        S00_HINTS, (int)(sizeof(S00_HINTS) / sizeof(S00_HINTS[0])),
         AB(AB_DASH),
         46, 2, 15, 42, 14, 22.0f,
     },
@@ -117,7 +129,7 @@ const Level LEVELS[] = {
         "s01", "SECTOR 01", "SAVE01.DAT", "last saved 1998-04-11", 73728,
         S01_BOXES, (int)(sizeof(S01_BOXES) / sizeof(S01_BOXES[0])),
         S01_TERMS, (int)(sizeof(S01_TERMS) / sizeof(S01_TERMS[0])),
-        S01_MSGS,  (int)(sizeof(S01_MSGS)  / sizeof(S01_MSGS[0])),
+        S01_HINTS, (int)(sizeof(S01_HINTS) / sizeof(S01_HINTS[0])),
         AB(AB_GLIDE),
         96, 2, 15, 93, 16, 34.0f,
     },

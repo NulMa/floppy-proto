@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 static const Color C_BG      = {  10,  13,  24, 255 };
 static const Color C_GRID    = {  17,  22,  38, 255 };
@@ -59,6 +60,123 @@ static void commas(long v, char *out, int n)
 static void center(const char *s, int y, int size, Color c)
 {
     DrawText(s, VIEW_W / 2 - MeasureText(s, size) / 2, y, size, c);
+}
+
+/* ── 힌트 ────────────────────────────────────────────────────────────
+ *
+ * 월드 좌표에 붙어서, 가까이 있는 동안 계속 떠 있는다.
+ * 화면 중앙에 한 번 띄우고 끝내면 읽을 타이밍을 플레이어가 못 고른다. */
+
+/* 키캡 하나. 다음 키캡의 x 오프셋을 반환한다 */
+static int draw_keycap(int x, int y, const char *label, int len, float a)
+{
+    char buf[16];
+    int n = len < 15 ? len : 15;
+    memcpy(buf, label, n);
+    buf[n] = '\0';
+    int tw = MeasureText(buf, 10);
+    int bw = tw + 9;
+    DrawRectangle(x, y, bw, 14, Fade((Color){ 40, 48, 70, 255 }, a));
+    DrawRectangle(x, y + 12, bw, 2, Fade((Color){ 22, 26, 40, 255 }, a));
+    DrawRectangleLines(x, y, bw, 14, Fade((Color){ 150, 168, 210, 255 }, a));
+    DrawText(buf, x + 5, y + 3, 10, Fade((Color){ 226, 234, 255, 255 }, a));
+    return bw + 4;
+}
+
+#define HINT_MAX_SHOWN 2
+
+static void draw_hints(const World *w, int camX, float t)
+{
+    const Level *L = sim_level(w);
+    float pcx = w->p.x + PLAYER_W * 0.5f, pcy = w->p.y + PLAYER_H * 0.5f;
+
+    /* 가까운 것 몇 개만 남긴다. 전부 그리면 서로 가려서 하나도 못 읽는다. */
+    int   pick[HINT_MAX_SHOWN];
+    float pickD[HINT_MAX_SHOWN];
+    int   n = 0;
+
+    for (int i = 0; i < L->hintCount; i++) {
+        const HintSpec *h = &L->hints[i];
+        float ax = h->x * (float)TILE + TILE * 0.5f;
+        float ay = h->y * (float)TILE + TILE * 0.5f;
+        /* 세로 거리는 절반만 센다. 겹침을 피하려고 앵커를 위로 올린 것이
+         * 가시성을 깎으면 안 된다 — 레벨은 대체로 가로로 흐른다. */
+        float dx = (pcx - ax) / TILE, dy = (pcy - ay) / TILE * 0.45f;
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d > h->range + 1.5f) continue;
+
+        int at = n;
+        while (at > 0 && pickD[at - 1] > d) at--;
+        if (at >= HINT_MAX_SHOWN) continue;
+        for (int k = (n < HINT_MAX_SHOWN ? n : HINT_MAX_SHOWN - 1); k > at; k--) {
+            pick[k] = pick[k - 1]; pickD[k] = pickD[k - 1];
+        }
+        pick[at] = i; pickD[at] = d;
+        if (n < HINT_MAX_SHOWN) n++;
+    }
+
+    for (int s = 0; s < n; s++) {
+        const HintSpec *h = &L->hints[pick[s]];
+        float ax = h->x * (float)TILE + TILE * 0.5f;
+        float ay = h->y * (float)TILE;
+        float d = pickD[s], r = (float)h->range;
+        float a = (d <= r) ? 1.0f : (1.0f - (d - r) / 1.5f);
+        if (a <= 0.0f) continue;
+
+        /* 크기 계산 */
+        int kw = 0, kn = 0;
+        if (h->keys) {
+            const char *s = h->keys;
+            while (*s) {
+                const char *e = s;
+                while (*e && *e != ' ') e++;
+                char tmp[16]; int n = (int)(e - s); if (n > 15) n = 15;
+                memcpy(tmp, s, n); tmp[n] = '\0';
+                kw += MeasureText(tmp, 10) + 13;
+                kn++;
+                s = (*e) ? e + 1 : e;
+            }
+            if (kw > 0) kw -= 4;
+        }
+        int tw = h->l1 ? MeasureText(h->l1, 10) : 0;
+        int t2 = h->l2 ? MeasureText(h->l2, 10) : 0;
+        if (t2 > tw) tw = t2;
+        int bw = (kw > tw ? kw : tw) + 14;
+        int bh = 8 + (kn ? 17 : 0) + (h->l1 ? 12 : 0) + (h->l2 ? 11 : 0);
+
+        int bx = (int)ax - camX - bw / 2;
+        int by = (int)ay - bh - 10;
+        if (bx < 2) bx = 2;
+        if (bx + bw > VIEW_W - 2) bx = VIEW_W - 2 - bw;
+        if (by < 32) by = 32;
+
+        DrawRectangle(bx, by, bw, bh, Fade((Color){ 10, 13, 24, 255 }, a * 0.92f));
+        DrawRectangleLines(bx, by, bw, bh, Fade((Color){ 70, 84, 118, 255 }, a));
+        /* 앵커를 가리키는 꼬리 */
+        DrawRectangle((int)ax - camX - 1, by + bh, 2, 6, Fade((Color){ 70, 84, 118, 255 }, a));
+
+        int cy = by + 5;
+        if (kn) {
+            int kx = bx + (bw - kw) / 2;
+            const char *s = h->keys;
+            while (*s) {
+                const char *e = s;
+                while (*e && *e != ' ') e++;
+                kx += draw_keycap(kx, cy, s, (int)(e - s), a);
+                s = (*e) ? e + 1 : e;
+            }
+            cy += 17;
+        }
+        if (h->l1) {
+            DrawText(h->l1, bx + (bw - MeasureText(h->l1, 10)) / 2, cy, 10,
+                     Fade((Color){ 226, 234, 255, 255 }, a));
+            cy += 12;
+        }
+        if (h->l2)
+            DrawText(h->l2, bx + (bw - MeasureText(h->l2, 10)) / 2, cy, 10,
+                     Fade(C_DIM, a));
+    }
+    (void)t;
 }
 
 /* ── 월드 ───────────────────────────────────────────────────────────── */
@@ -213,27 +331,14 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
             DrawText("absent", px + pw - 38, ly, 10, (Color){ 96, 62, 70, 255 });
     }
 
-    /* 아직 못 얻은 능력의 키는 안내에도 안 뜬다 */
+    /* 조작 안내는 월드에 떠 있는 힌트가 맡는다.
+     * 하단 바는 눈에 잘 안 들어와서 가르치는 용도로 못 쓴다 — 메타 키만 남긴다. */
     const char *keys = sim_ability_unlocked(w, AB_DASH)
-                     ? "arrows move   space jump   shift dash   R restart   F5 tune"
-                     : "arrows move   space jump   R restart   F5 tune";
+                     ? "shift dash    R restart    F5 tune"
+                     : "R restart    F5 tune";
     DrawRectangle(0, VIEW_H - 13, VIEW_W, 13, (Color){ 8, 10, 18, 200 });
-    DrawText(keys, VIEW_W / 2 - MeasureText(keys, 10) / 2, VIEW_H - 11, 10, C_DIM);
-
-    /* 안내 문구 */
-    if (w->msgTimer > 0.0f && w->msgL1) {
-        float a = w->msgTimer > 1.0f ? 1.0f : w->msgTimer;
-        int bw = MeasureText(w->msgL1, 10);
-        int b2 = w->msgL2 ? MeasureText(w->msgL2, 10) : 0;
-        if (b2 > bw) bw = b2;
-        /* 바닥(row15 = y240) 위, 로드아웃 패널 아래.
-         * 여기보다 내리면 플레이어와 지형을 가린다 */
-        int bx = VIEW_W / 2 - bw / 2 - 8, by = 150;
-        DrawRectangle(bx, by, bw + 16, w->msgL2 ? 32 : 20, Fade((Color){ 8, 10, 18, 255 }, a * 0.88f));
-        DrawRectangleLines(bx, by, bw + 16, w->msgL2 ? 32 : 20, Fade(C_DIM, a));
-        center(w->msgL1, by + 5, 10, Fade(C_TEXT, a));
-        if (w->msgL2) center(w->msgL2, by + 17, 10, Fade(C_DIM, a));
-    }
+    DrawText(keys, VIEW_W / 2 - MeasureText(keys, 10) / 2, VIEW_H - 11, 10,
+             (Color){ 62, 70, 94, 255 });
 
     if (w->checkFlash > 0.0f)
         center("format halted at this sector", 60, 10, Fade(C_TERM, w->checkFlash));
@@ -406,6 +511,7 @@ int main(int argc, char **argv)
             else if (screen == SCR_END)  draw_end(&world, recovered, bytesSaved);
             else {
                 draw_world(&world, (float)GetTime(), camX);
+                draw_hints(&world, camX, (float)GetTime());
                 draw_hud(&world, toast, toastTimer);
                 if (screen == SCR_CLEAR) draw_clear(&world, gained);
             }

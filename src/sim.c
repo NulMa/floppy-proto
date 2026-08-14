@@ -32,7 +32,6 @@ void tune_defaults(Tune *t)
     t->bootMult       = 1.20f;
     t->formatLead     = 200.0f;
     t->formatScale    = 1.00f;
-    t->msgTime        = 4.00f;
 }
 
 int tune_set(Tune *t, const char *key, float v)
@@ -43,7 +42,7 @@ int tune_set(Tune *t, const char *key, float v)
     K(coyoteTime) K(jumpBuffer)
     K(jump2Mult) K(dashSpeed) K(dashTime) K(dashCooldown)
     K(glideFall) K(gripSlide) K(gripJumpX) K(gripJumpY) K(gripStick) K(bootMult)
-    K(formatLead) K(formatScale) K(msgTime)
+    K(formatLead) K(formatScale)
 #undef K
     return 0;
 }
@@ -216,7 +215,6 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
     w->evLand = w->evDeny = w->evEquip = w->evCheckpoint = w->evDeath = 0;
     if (w->denyFlash  > 0) w->denyFlash  -= dt;
     if (w->checkFlash > 0) w->checkFlash -= dt;
-    if (w->msgTimer   > 0) w->msgTimer   -= dt;
 
     /* 로드아웃 — 터미널 위에서, 그 터미널에 남아 있는 유틸리티만 */
     if (in->toggleAbility >= 0 && in->toggleAbility < AB_COUNT) {
@@ -343,21 +341,6 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
         if (w->formatX > want) w->formatX = want;
     } else {
         w->formatX += L->formatSpeed * t->formatScale * dt;
-    }
-
-    /* ── 안내 문구 — 구간에 처음 들어올 때 한 번 ── */
-    {
-        int col = (int)((p->x + PLAYER_W * 0.5f) / TILE);
-        for (int i = 0; i < L->msgCount && i < 32; i++) {
-            if (w->msgShown & (1u << i)) continue;
-            if (col >= L->msgs[i].x0 && col <= L->msgs[i].x1) {
-                w->msgShown |= (1u << i);
-                w->msgL1 = L->msgs[i].l1;
-                w->msgL2 = L->msgs[i].l2;
-                w->msgTimer = t->msgTime;
-                break;
-            }
-        }
     }
 
     /* ── 사망 / 클리어 ── */

@@ -11,8 +11,19 @@ typedef struct { short x, y, w, h; unsigned char t; } Box;
  * 튜토리얼처럼 "이 섹터엔 이 유틸리티만 남아 있다"를 표현할 때 쓴다. */
 typedef struct { short x, y; unsigned short avail; } TermSpec;
 
-/* 플레이어가 x0..x1 (타일) 구간에 들어오면 한 번 표시하고 끝 */
-typedef struct { short x0, x1; const char *l1, *l2; } MsgSpec;
+/* 힌트 — **월드 좌표에 붙어서 가까이 있는 동안 계속 떠 있는다.**
+ *
+ * 화면 중앙에 한 번 띄우고 끝내면 읽을 타이밍을 플레이어가 못 고른다.
+ * 파동에 쫓기는 중이면 더 그렇다. 위치에 고정해야 "필요할 때 거기 있는" 안내가 된다.
+ *
+ * keys: 키캡으로 그릴 것. 공백 구분. NULL 이면 없음. 예) "< >"  "SPACE"  "5"
+ * range: 이 타일 거리 안에 들어오면 보이고, 가장자리에서 서서히 사라진다. */
+typedef struct {
+    short x, y;
+    short range;
+    const char *keys;
+    const char *l1, *l2;
+} HintSpec;
 
 typedef struct {
     const char *id;          /* "s00" */
@@ -23,7 +34,7 @@ typedef struct {
 
     const Box      *boxes;  int boxCount;
     const TermSpec *terms;  int termCount;
-    const MsgSpec  *msgs;   int msgCount;
+    const HintSpec *hints;  int hintCount;
 
     /* 이 스테이지를 클리어하면 영구 해금되는 능력 (비트마스크).
      * 회수한 디스크 안에 그 유틸리티가 들어 있었다는 설정이다. */

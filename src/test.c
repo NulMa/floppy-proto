@@ -81,8 +81,8 @@ int main(void)
     /* ── 레벨 데이터가 예산을 얼마나 먹는가 ──
      * "레벨을 더 넣어도 되나"에 답하려면 추정이 아니라 실제 구조체 크기를 봐야 한다. */
     printf("\n== 레벨 데이터 용량 ==\n");
-    printf("  Box %d B / TermSpec %d B / MsgSpec %d B / Level %d B\n",
-           (int)sizeof(Box), (int)sizeof(TermSpec), (int)sizeof(MsgSpec), (int)sizeof(Level));
+    printf("  Box %d B / TermSpec %d B / HintSpec %d B / Level %d B\n",
+           (int)sizeof(Box), (int)sizeof(TermSpec), (int)sizeof(HintSpec), (int)sizeof(Level));
     {
         long total = 0;
         for (int i = 0; i < LEVEL_COUNT; i++) {
@@ -90,11 +90,11 @@ int main(void)
             long b = (long)sizeof(Level)
                    + (long)L->boxCount * sizeof(Box)
                    + (long)L->termCount * sizeof(TermSpec)
-                   + (long)L->msgCount * sizeof(MsgSpec);
+                   + (long)L->hintCount * sizeof(HintSpec);
             /* 문자열은 대략치 — 실제로는 .rdata 에 들어간다 */
-            b += 160;
-            printf("  [%s] 약 %ld B  (box %d / term %d / msg %d)\n",
-                   L->id, b, L->boxCount, L->termCount, L->msgCount);
+            b += 160 + (long)L->hintCount * 60;
+            printf("  [%s] 약 %ld B  (box %d / term %d / hint %d)\n",
+                   L->id, b, L->boxCount, L->termCount, L->hintCount);
             total += b;
         }
         printf("  현재 %d개 합계 약 %ld B = 예산의 %.3f%%\n",
@@ -118,8 +118,8 @@ int main(void)
                 if (w.map[r][c] == T_GOAL)     goals++;
                 if (w.map[r][c] == T_TERMINAL) terms++;
             }
-        printf("  [%s] %-10s %-14s width %2d  terms %d  format %.0fpx/s\n",
-               L->id, L->sector, L->file, L->width, terms, L->formatSpeed);
+        printf("  [%s] %-10s %-14s width %2d  terms %d  hints %d  format %.0fpx/s\n",
+               L->id, L->sector, L->file, L->width, terms, L->hintCount, L->formatSpeed);
 
         snprintf(label, sizeof(label), "%s: 목표 1개", L->id);
         check(goals == 1, label);
@@ -131,6 +131,15 @@ int main(void)
         check(L->goalCol < L->width, label);
         snprintf(label, sizeof(label), "%s: 시작 로드아웃 없이도 파동보다 빠르다", L->id);
         check(L->formatSpeed * t.formatScale < t.maxSpeed * 0.5f, label);
+
+        /* 힌트가 레벨 밖이나 지형 속에 박혀 있으면 안 보인다 */
+        int badHint = 0;
+        for (int h = 0; h < L->hintCount; h++)
+            if (L->hints[h].x < 0 || L->hints[h].x >= L->width ||
+                L->hints[h].y < 1 || L->hints[h].y >= MAP_H || L->hints[h].range <= 0)
+                badHint = 1;
+        snprintf(label, sizeof(label), "%s: 힌트 앵커가 전부 레벨 안에 있다", L->id);
+        check(!badHint, label);
     }
 
     /* ── 해금 곡선 ──

@@ -40,7 +40,6 @@ typedef struct {
     float bootMult;
     float formatLead;         /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
     float formatScale;        /* 레벨별 파동 속도에 곱하는 전역 배수 (난이도 조절용) */
-    float msgTime;            /* 안내 문구가 떠 있는 시간 */
 } Tune;
 
 void tune_defaults(Tune *t);
@@ -76,9 +75,7 @@ typedef struct {
     unsigned avail;        /* 지금 터미널에서 장착 가능한 능력. 0 = 전부 */
     float spawnX, spawnY;
 
-    unsigned msgShown;     /* 이미 띄운 안내 (비트마스크) */
-    float    msgTimer;
-    const char *msgL1, *msgL2;
+    /* 안내는 상태를 안 갖는다 — 힌트는 플레이어 위치의 함수라 렌더가 직접 계산한다 */
 
     int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip, evCheckpoint, evDeath;
     float denyFlash, checkFlash;
