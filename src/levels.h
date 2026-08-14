@@ -11,16 +11,16 @@ typedef struct { short x, y, w, h; unsigned char t; } Box;
  * 튜토리얼처럼 "이 섹터엔 이 유틸리티만 남아 있다"를 표현할 때 쓴다. */
 typedef struct { short x, y; unsigned short avail; } TermSpec;
 
-/* 힌트 — **월드 좌표에 붙어서 가까이 있는 동안 계속 떠 있는다.**
+/* 힌트 — **월드 좌표에 붙어서 항상 떠 있는다.** 박스 없이 텍스트만.
  *
  * 화면 중앙에 한 번 띄우고 끝내면 읽을 타이밍을 플레이어가 못 고른다.
- * 파동에 쫓기는 중이면 더 그렇다. 위치에 고정해야 "필요할 때 거기 있는" 안내가 된다.
+ * 근처에서만 뜨게 해도 놓치기 쉽다. 화면에 들어오면 그냥 보이는 게 낫다.
+ * (화면 밖은 카메라가 알아서 잘라내므로 별도 범위 판정이 필요 없다)
  *
- * keys: 키캡으로 그릴 것. 공백 구분. NULL 이면 없음. 예) "< >"  "SPACE"  "5"
- * range: 이 타일 거리 안에 들어오면 보이고, 가장자리에서 서서히 사라진다. */
+ * keys: 키 표기. 공백 구분. NULL 이면 없음. 예) "< >"  "SPACE"  "1"
+ *       렌더에서 [ ] 로 감싸 텍스트로 그린다 */
 typedef struct {
     short x, y;
-    short range;
     const char *keys;
     const char *l1, *l2;
 } HintSpec;

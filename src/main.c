@@ -71,119 +71,103 @@ static void center(const char *s, int y, int size, Color c)
 
 /* ── 힌트 ────────────────────────────────────────────────────────────
  *
- * 월드 좌표에 붙어서, 가까이 있는 동안 계속 떠 있는다.
- * 화면 중앙에 한 번 띄우고 끝내면 읽을 타이밍을 플레이어가 못 고른다. */
-
-/* 키캡 하나. 다음 키캡의 x 오프셋을 반환한다 */
-static int draw_keycap(int x, int y, const char *label, int len, float a)
+ * 월드 좌표에 붙어서 **항상** 떠 있는다. 박스 없이 텍스트만.
+ * 화면 밖은 카메라가 잘라내므로 별도 범위 판정이 필요 없다.
+ *
+ * 배경이 없으니 지형 위에서 글자가 묻힌다 → 1px 그림자로 읽히게 한다. */
+static void text_shadow(const char *s, int x, int y, Color c)
 {
-    char buf[16];
-    int n = len < 15 ? len : 15;
-    memcpy(buf, label, n);
-    buf[n] = '\0';
-    int tw = MeasureText(buf, 10);
-    int bw = tw + 9;
-    DrawRectangle(x, y, bw, 14, Fade((Color){ 40, 48, 70, 255 }, a));
-    DrawRectangle(x, y + 12, bw, 2, Fade((Color){ 22, 26, 40, 255 }, a));
-    DrawRectangleLines(x, y, bw, 14, Fade((Color){ 150, 168, 210, 255 }, a));
-    DrawText(buf, x + 5, y + 3, 10, Fade((Color){ 226, 234, 255, 255 }, a));
-    return bw + 4;
+    DrawText(s, x + 1, y + 1, 10, (Color){ 6, 8, 14, 220 });
+    DrawText(s, x, y, 10, c);
 }
 
-#define HINT_MAX_SHOWN 2
+/* "SPACE" → "[SPACE]" 로 감싼 문자열을 만든다 */
+static void bracket_keys(const char *keys, char *out, int n)
+{
+    int o = 0;
+    const char *s = keys;
+    while (*s && o < n - 4) {
+        const char *e = s;
+        while (*e && *e != ' ') e++;
+        if (o) out[o++] = ' ';
+        out[o++] = '[';
+        for (const char *p = s; p < e && o < n - 3; p++) out[o++] = *p;
+        out[o++] = ']';
+        s = (*e) ? e + 1 : e;
+    }
+    out[o] = '\0';
+}
 
-static void draw_hints(const World *w, int camX, float t)
+#define HINT_MAX 24
+
+static void draw_hints(const World *w, int camX)
 {
     const Level *L = sim_level(w);
-    float pcx = w->p.x + PLAYER_W * 0.5f, pcy = w->p.y + PLAYER_H * 0.5f;
-
-    /* 가까운 것 몇 개만 남긴다. 전부 그리면 서로 가려서 하나도 못 읽는다. */
-    int   pick[HINT_MAX_SHOWN];
-    float pickD[HINT_MAX_SHOWN];
-    int   n = 0;
+    /* 이미 그린 자리 — 겹치면 위로 밀어낸다. 레벨 작성이 조금 틀려도 읽히게. */
+    int px0[HINT_MAX], py0[HINT_MAX], px1[HINT_MAX], py1[HINT_MAX];
+    int placed = 0;
 
     for (int i = 0; i < L->hintCount; i++) {
         const HintSpec *h = &L->hints[i];
-        float ax = h->x * (float)TILE + TILE * 0.5f;
-        float ay = h->y * (float)TILE + TILE * 0.5f;
-        /* 세로 거리는 절반만 센다. 겹침을 피하려고 앵커를 위로 올린 것이
-         * 가시성을 깎으면 안 된다 — 레벨은 대체로 가로로 흐른다. */
-        float dx = (pcx - ax) / TILE, dy = (pcy - ay) / TILE * 0.45f;
-        float d = sqrtf(dx * dx + dy * dy);
-        if (d > h->range + 1.5f) continue;
+        int ax = h->x * TILE + TILE / 2 - camX;
+        int ay = h->y * TILE;
 
-        int at = n;
-        while (at > 0 && pickD[at - 1] > d) at--;
-        if (at >= HINT_MAX_SHOWN) continue;
-        for (int k = (n < HINT_MAX_SHOWN ? n : HINT_MAX_SHOWN - 1); k > at; k--) {
-            pick[k] = pick[k - 1]; pickD[k] = pickD[k - 1];
-        }
-        pick[at] = i; pickD[at] = d;
-        if (n < HINT_MAX_SHOWN) n++;
-    }
+        char keys[64] = { 0 };
+        if (h->keys) bracket_keys(h->keys, keys, sizeof(keys));
 
-    for (int s = 0; s < n; s++) {
-        const HintSpec *h = &L->hints[pick[s]];
-        float ax = h->x * (float)TILE + TILE * 0.5f;
-        float ay = h->y * (float)TILE;
-        float d = pickD[s], r = (float)h->range;
-        float a = (d <= r) ? 1.0f : (1.0f - (d - r) / 1.5f);
-        if (a <= 0.0f) continue;
+        int wk = keys[0] ? MeasureText(keys, 10) : 0;
+        int w1 = h->l1 ? MeasureText(h->l1, 10) : 0;
+        int w2 = h->l2 ? MeasureText(h->l2, 10) : 0;
+        int bw = wk > w1 ? wk : w1;
+        if (w2 > bw) bw = w2;
+        int bh = (keys[0] ? 12 : 0) + (h->l1 ? 12 : 0) + (h->l2 ? 11 : 0);
 
-        /* 크기 계산 */
-        int kw = 0, kn = 0;
-        if (h->keys) {
-            const char *s = h->keys;
-            while (*s) {
-                const char *e = s;
-                while (*e && *e != ' ') e++;
-                char tmp[16]; int n = (int)(e - s); if (n > 15) n = 15;
-                memcpy(tmp, s, n); tmp[n] = '\0';
-                kw += MeasureText(tmp, 10) + 13;
-                kn++;
-                s = (*e) ? e + 1 : e;
-            }
-            if (kw > 0) kw -= 4;
-        }
-        int tw = h->l1 ? MeasureText(h->l1, 10) : 0;
-        int t2 = h->l2 ? MeasureText(h->l2, 10) : 0;
-        if (t2 > tw) tw = t2;
-        int bw = (kw > tw ? kw : tw) + 14;
-        int bh = 8 + (kn ? 17 : 0) + (h->l1 ? 12 : 0) + (h->l2 ? 11 : 0);
+        int bx = ax - bw / 2;
+        int by = ay - bh - 4;
 
-        int bx = (int)ax - camX - bw / 2;
-        int by = (int)ay - bh - 10;
-        if (bx < 2) bx = 2;
-        if (bx + bw > VIEW_W - 2) bx = VIEW_W - 2 - bw;
+        /* 화면 밖이면 그릴 필요 없다 */
+        if (bx > VIEW_W + 8 || bx + bw < -8) continue;
+        if (bx < 3) bx = 3;
+        if (bx + bw > VIEW_W - 3) bx = VIEW_W - 3 - bw;
         if (by < 32) by = 32;
 
-        DrawRectangle(bx, by, bw, bh, Fade((Color){ 10, 13, 24, 255 }, a * 0.92f));
-        DrawRectangleLines(bx, by, bw, bh, Fade((Color){ 70, 84, 118, 255 }, a));
-        /* 앵커를 가리키는 꼬리 */
-        DrawRectangle((int)ax - camX - 1, by + bh, 2, 6, Fade((Color){ 70, 84, 118, 255 }, a));
-
-        int cy = by + 5;
-        if (kn) {
-            int kx = bx + (bw - kw) / 2;
-            const char *s = h->keys;
-            while (*s) {
-                const char *e = s;
-                while (*e && *e != ' ') e++;
-                kx += draw_keycap(kx, cy, s, (int)(e - s), a);
-                s = (*e) ? e + 1 : e;
+        /* 겹치면 비켜준다. 위로만 밀면 천장에 막힌 것들이 한자리에 쌓인다 —
+         * 위/아래를 번갈아 시도하고, 다 막히면 원위치로 둔다. */
+        {
+            int step = bh + 5, base = by, best = by;
+            for (int tryN = 0; tryN < 7; tryN++) {
+                int cand = base + ((tryN % 2) ? (tryN / 2 + 1) * step : -(tryN / 2) * step);
+                if (tryN == 0) cand = base;
+                if (cand < 32 || cand + bh > VIEW_H - 16) continue;
+                int hit = 0;
+                for (int k = 0; k < placed; k++)
+                    /* 가로 여유를 넉넉히 준다. 딱 붙으면 겹치진 않아도 한 줄로 읽힌다. */
+                    if (bx < px1[k] + 14 && bx + bw > px0[k] - 14 &&
+                        cand < py1[k] + 3 && cand + bh > py0[k] - 3) { hit = 1; break; }
+                if (!hit) { best = cand; break; }
             }
-            cy += 17;
+            by = best;
+            if (by < 32) by = 32;
+        }
+
+        int cy = by;
+        if (keys[0]) {
+            text_shadow(keys, bx + (bw - wk) / 2, cy, (Color){ 150, 200, 255, 255 });
+            cy += 12;
         }
         if (h->l1) {
-            DrawText(h->l1, bx + (bw - MeasureText(h->l1, 10)) / 2, cy, 10,
-                     Fade((Color){ 226, 234, 255, 255 }, a));
+            text_shadow(h->l1, bx + (bw - w1) / 2, cy, (Color){ 232, 238, 255, 255 });
             cy += 12;
         }
         if (h->l2)
-            DrawText(h->l2, bx + (bw - MeasureText(h->l2, 10)) / 2, cy, 10,
-                     Fade(C_DIM, a));
+            text_shadow(h->l2, bx + (bw - w2) / 2, cy, (Color){ 132, 146, 178, 255 });
+
+        if (placed < HINT_MAX) {
+            px0[placed] = bx; py0[placed] = by;
+            px1[placed] = bx + bw; py1[placed] = by + bh;
+            placed++;
+        }
     }
-    (void)t;
 }
 
 /* ── 월드 ───────────────────────────────────────────────────────────── */
@@ -585,7 +569,7 @@ int main(int argc, char **argv)
             else if (screen == SCR_END)  draw_end(&world, recovered, bytesSaved);
             else {
                 draw_world(&world, (float)GetTime(), camX);
-                draw_hints(&world, camX, (float)GetTime());
+                draw_hints(&world, camX);
                 draw_hud(&world, toast, toastTimer);
                 if (screen == SCR_CLEAR) draw_clear(&world, gained);
             }

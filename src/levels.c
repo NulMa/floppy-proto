@@ -42,21 +42,17 @@ static const TermSpec S00_TERMS[] = {
 
 /* 힌트는 위치에 붙어서 가까이 있는 동안 계속 떠 있는다.
  * 기본 이동부터 하나씩 — 놓쳐도 돌아오면 다시 보인다. */
-/* 앵커 높이를 엇갈리게 둔다. 가까운 힌트가 같은 높이에 있으면 서로 가린다.
- * (렌더 쪽에서도 가장 가까운 2개만 그리도록 제한하고 있다) */
+/* 앵커 높이를 엇갈리게 둔다. 겹치면 렌더가 위로 밀어내지만, 안 겹치게 두는 게 낫다. */
 static const HintSpec S00_HINTS[] = {
-    {  2, 14, 3, "< >",   "MOVE",              0 },
-    {  5, 10, 3, 0,       "TERMINAL",          "the format stops here" },
-    {  9, 14, 3, "SPACE", "JUMP",              "hold longer to go higher" },
-    { 12, 10, 3, 0,       "FORMAT IS COMING",  "keep moving right" },
-    { 15, 14, 3, "SPACE", "JUMP ACROSS",       "spikes below" },
-    { 17, 10, 3, "1",     "LOAD boot.exe",     "you cannot climb without it" },
-    { 21,  8, 4, 0,       "3 TILES UP",        "a bare jump reaches 2" },
-    { 28, 11, 3, 0,       "SPIKES",            "jump over them" },
-    { 34, 13, 3, 0,       "JUMP PAD",          "it throws you up" },
-    /* 디스크(38,10) 위로 박스가 덮이지 않게 오른쪽 위로 비켜둔다 */
-    { 42,  7, 4, 0,       "AUTOEXEC.BAT",      "optional - it holds a utility" },
-    { 42, 13, 4, 0,       "DRIVE SLOT",        "this is the way out" },
+    {  2, 13, "< >",   "MOVE",              0 },
+    {  5,  9, 0,       "TERMINAL",          "the format stops here" },
+    { 10, 13, "SPACE", "JUMP",              "hold longer to go higher" },
+    { 13,  8, 0,       "FORMAT IS COMING",  "keep moving right" },
+    { 19, 11, "1",     "LOAD boot.exe",     "the ledge needs it" },
+    { 28, 10, 0,       "SPIKES",            "jump over them" },
+    { 34, 13, 0,       "JUMP PAD",          "it throws you up" },
+    { 38,  6, 0,       "AUTOEXEC.BAT",      "optional - it holds a utility" },
+    { 42, 12, 0,       "DRIVE SLOT",        "this is the way out" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -109,11 +105,11 @@ static const TermSpec S01_TERMS[] = {
 };
 
 static const HintSpec S01_HINTS[] = {
-    {  2, 12, 4, "1 2",   "TWO UTILITIES NOW", "swap them at any terminal" },
-    { 13, 10, 3, 0,       "boot.exe",          "gets you up here" },
-    { 29, 12, 4, "SHIFT", "dash.exe",          "gets you across" },
-    { 58, 12, 4, 0,       "LOW CEILING AHEAD", "jumping will not help there" },
-    { 90, 14, 4, 0,       "SAVE01.DAT",        "someone did not finish this" },
+    {  2, 12, "1 2",   "TWO UTILITIES NOW", "swap them at any terminal" },
+    { 13,  9, 0,       "boot.exe",          "gets you up here" },
+    { 29, 12, "SHIFT", "dash.exe",          "gets you across" },
+    { 58, 12, 0,       "LOW CEILING AHEAD", "jumping will not help there" },
+    { 90, 13, 0,       "SAVE01.DAT",        "grab it before the slot" },
 };
 
 /* ══════════════════════════════════════════════════════════════════════ */

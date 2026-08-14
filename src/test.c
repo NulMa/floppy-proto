@@ -153,7 +153,7 @@ int main(void)
         int badHint = 0;
         for (int h = 0; h < L->hintCount; h++)
             if (L->hints[h].x < 0 || L->hints[h].x >= L->width ||
-                L->hints[h].y < 1 || L->hints[h].y >= MAP_H || L->hints[h].range <= 0)
+                L->hints[h].y < 1 || L->hints[h].y >= MAP_H || L->hints[h].l1 == 0)
                 badHint = 1;
         snprintf(label, sizeof(label), "%s: 힌트 앵커가 전부 레벨 안에 있다", L->id);
         check(!badHint, label);
