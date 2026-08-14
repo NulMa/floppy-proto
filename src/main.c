@@ -263,9 +263,9 @@ static void draw_world(const World *w, float t, int camX)
 
     /* 죽는 중 — 정상 스프라이트 대신 흩어지는 조각을 그린다.
      * 곧바로 되살리면 무슨 일이 일어났는지 못 본다. 낙사는 화면 밖이라 아무것도 안 그린다. */
-    if (w->deathTimer > 0.0f) {
+    if (w->deathCause != DEATH_NONE) {
         if (w->deathCause != DEATH_FALL) {
-            float k = 1.0f - (w->deathTimer / 0.45f);   /* 0 → 1 로 흩어진다 */
+            float k = 1.0f - (w->deathTimer / w->deathTimerMax);   /* 0 → 1 로 흩어진다 */
             Color dc = (w->deathCause == DEATH_SPIKE) ? C_SPIKE : C_FMT;
             for (int i = 0; i < 8; i++) {
                 int ox = ((i * 37) % 13) - 6, oy = ((i * 53) % 11) - 5;
@@ -424,9 +424,11 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
     DrawText(keys, VIEW_W / 2 - MeasureText(keys, 10) / 2, VIEW_H - 11, 10,
              (Color){ 62, 70, 94, 255 });
 
-    /* 사망 연출 — 원인별로 다르게. 무엇에 죽었는지 읽혀야 다시 안 죽는다 */
-    if (w->deathTimer > 0.0f) {
-        float k = w->deathTimer / 0.45f;          /* 1 → 0 */
+    /* 사망 연출 — 원인별로 다르게. 무엇에 죽었는지 읽혀야 다시 안 죽는다.
+     * 연출이 끝나도 화면은 유지된다 — 되살아나는 타이밍은 사람이 정한다. */
+    if (w->deathCause != DEATH_NONE) {
+        float prog = w->deathTimer / w->deathTimerMax;   /* 1 → 0 */
+        int   ready = (w->deathTimer <= 0.0f);           /* 키 입력 대기 중 */
         const char *l1, *l2;
         Color tint;
         switch (w->deathCause) {
@@ -434,13 +436,16 @@ static void draw_hud(const World *w, const char *toast, float toastTimer)
             case DEATH_FORMAT: tint = C_FMT;   l1 = "OVERWRITTEN";     l2 = "the format caught up";    break;
             default:           tint = C_DIM;   l1 = "LOST";            l2 = "nothing down there";      break;
         }
-        DrawRectangle(0, 0, VIEW_W, VIEW_H, Fade(tint, k * 0.30f));
-        /* 주사선 글리치 */
+        /* 들어올 때 진하게 → 대기 중에는 옅게 깔아둔다 */
+        float tintA = 0.16f + prog * 0.20f;
+        DrawRectangle(0, 0, VIEW_W, VIEW_H, Fade(tint, tintA));
         for (int i = 0; i < VIEW_H; i += 3)
-            if (((i / 3 + (int)(w->deathTimer * 90)) & 3) == 0)
-                DrawRectangle(0, i, VIEW_W, 1, Fade(tint, k * 0.35f));
-        center(l1, VIEW_H / 2 - 14, 20, Fade(tint, k > 0.6f ? 1.0f : k / 0.6f));
-        center(l2, VIEW_H / 2 + 10, 10, Fade(C_TEXT, k * 0.9f));
+            if (((i / 3 + (int)(GetTime() * 40)) & 3) == 0)
+                DrawRectangle(0, i, VIEW_W, 1, Fade(tint, 0.10f + prog * 0.25f));
+        center(l1, VIEW_H / 2 - 20, 20, tint);
+        center(l2, VIEW_H / 2 + 4, 10, C_TEXT);
+        if (ready && ((int)(GetTime() * 2) % 2) == 0)
+            center("press any key", VIEW_H / 2 + 28, 10, C_DIM);
     }
 
     if (w->checkFlash > 0.0f)
@@ -728,6 +733,9 @@ int main(int argc, char **argv)
                           || IsKeyPressed(KEY_X) || IsKeyPressed(KEY_L);
             for (int a = 0; a < AB_COUNT; a++)
                 if (IsKeyPressed(KEY_ONE + a)) in.toggleAbility = a;
+            /* 사망 후 리스폰용 — 아무 키나. GetKeyPressed 는 IsKeyPressed 와
+             * 다른 큐를 쓰므로 위 입력들과 간섭하지 않는다 */
+            in.anyKey = (GetKeyPressed() != 0);
             if (IsKeyPressed(KEY_R)) sim_load(&world, &tune, world.levelIndex);
 
             sim_step(&world, &tune, &in, dt);
@@ -755,8 +763,8 @@ int main(int argc, char **argv)
             else if (screen == SCR_END)  draw_end(&world, &prog);
             else {
                 draw_world(&world, (float)GetTime(), camX);
-                /* 죽는 동안에는 힌트를 끈다 — 사망 문구와 겹쳐서 둘 다 안 읽힌다 */
-                if (world.deathTimer <= 0.0f) draw_hints(&world, camX);
+                /* 죽어 있는 동안에는 힌트를 끈다 — 사망 문구와 겹쳐서 둘 다 안 읽힌다 */
+                if (world.deathCause == DEATH_NONE) draw_hints(&world, camX);
                 draw_hud(&world, toast, toastTimer);
                 if (screen == SCR_CLEAR) draw_clear(&world, gained);
             }

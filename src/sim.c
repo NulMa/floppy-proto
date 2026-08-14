@@ -183,6 +183,7 @@ void sim_load(World *w, const Tune *t, int levelIndex)
     w->p.y = w->spawnY;
     w->p.facing = 1;
     w->formatX = w->spawnX - t->formatLead * 2.0f;
+    w->formatAtCheckpoint = w->formatX;
     w->state = ST_PLAY;
 }
 
@@ -203,7 +204,15 @@ static void respawn(World *w, const Tune *t)
     p->x = w->spawnX;
     p->y = w->spawnY;
     p->facing = 1;
-    w->formatX = w->spawnX - t->formatLead;
+    /* 파동은 체크포인트 당시 위치로 되돌리되, **최소 formatLead 는 띄운다.**
+     *
+     * 터미널에서 파동이 멈추기만 하게 되면서, 파동이 바짝 붙은 채 터미널에
+     * 도착하는 상황이 생긴다. 그 상태를 그대로 복원하면 등반 구간에서
+     * 되살아나자마자 또 잡히는 **무한 사망**이 된다.
+     * 일부러 죽어서 파동을 물리는 게 가능해지지만, 그 대가로 구간을 다시 뛰어야 하고
+     * 무한 사망보다는 훨씬 낫다. */
+    float floorX = w->spawnX - t->formatLead;
+    w->formatX = (w->formatAtCheckpoint < floorX) ? w->formatAtCheckpoint : floorX;
     w->state = ST_PLAY;
 }
 
@@ -264,13 +273,17 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
     if (w->diskFlash  > 0) w->diskFlash  -= dt;
     if (w->padFlash   > 0) w->padFlash   -= dt;
 
-    /* ── 죽은 직후에는 멈춰 있는다 ──
+    /* ── 죽은 뒤 ──
      * 곧바로 되살리면 무슨 일이 일어났는지 못 본다. 가시를 밟았는지
-     * 파동에 잡혔는지도 구분이 안 간다. 잠깐 얼려서 보여주고 되살린다. */
-    if (w->deathTimer > 0.0f) {
-        w->deathTimer -= dt;
-        if (w->deathTimer <= 0.0f) {
-            w->deathTimer = 0.0f;
+     * 파동에 잡혔는지도 구분이 안 간다.
+     *
+     * deathFreeze 동안은 연출만 보여주고, **그 뒤엔 아무 키나 누를 때까지 기다린다.**
+     * 자동으로 되살리면 마음의 준비가 안 된 채로 다시 시작된다. */
+    if (w->deathCause != DEATH_NONE) {
+        if (w->deathTimer > 0.0f) {
+            w->deathTimer -= dt;
+            if (w->deathTimer < 0.0f) w->deathTimer = 0.0f;
+        } else if (in->anyKey) {
             w->deathCause = DEATH_NONE;
             respawn(w, t);
         }
@@ -414,8 +427,15 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
             w->spawnY = (float)(tr * TILE) + (TILE - PLAYER_H);
             w->evCheckpoint = 1; w->checkFlash = 1.2f;
         }
-        float want = p->x - t->formatLead;
-        if (w->formatX > want) w->formatX = want;
+        w->formatAtCheckpoint = w->formatX;   /* 죽으면 이 상황으로 되돌린다 */
+
+        /* ★ 터미널 위에서는 **멈춘다.** 뒤로 물리지 않는다.
+         *
+         * 예전엔 formatLead 만큼 뒤로 밀었는데, 그러면 화면 밖으로 나가서
+         * 아예 사라진 것처럼 보였다. 멈춰 있으면 얼마나 가까운지가 계속 보이고,
+         * 그게 "지금 출발해도 되나"를 판단하는 정보가 된다.
+         *
+         * 뒤로 물리는 건 죽어서 되살아날 때뿐이다 (respawn). */
     } else {
         w->formatX += L->formatSpeed * t->formatScale * dt;
     }
@@ -447,7 +467,7 @@ void sim_step(World *w, const Tune *t, const Input *in, float dt)
             w->deaths++;
             w->evDeath = 1;
             w->deathCause = cause;
-            w->deathTimer = t->deathFreeze;
+            w->deathTimer = w->deathTimerMax = (t->deathFreeze > 0.05f) ? t->deathFreeze : 0.05f;
             p->vx = p->vy = 0.0f;
             p->dashTimer = 0.0f;
             return;

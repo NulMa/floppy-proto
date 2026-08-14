@@ -57,7 +57,9 @@ typedef struct {
      * 점프키를 누르고 있으면 더 높이 튄다. 플레이어가 개입할 여지를 남긴다. */
     float padVel;             /* 기본 튕김 (음수) */
     float padVelHold;         /* 점프키를 누른 채 밟았을 때 */
-    float deathFreeze;        /* 죽고 나서 멈춰 있는 시간 — 죽은 걸 보여줘야 한다 */
+    /* 죽으면 이 시간 동안은 입력을 무시하고 연출만 보여준다.
+     * 그 뒤에는 **아무 키나 누를 때까지** 기다린다 — 되살아나는 타이밍은 사람이 정한다. */
+    float deathFreeze;
     float formatLead;         /* 터미널을 떠날 때 파동이 뒤에 잡히는 거리 */
     float formatScale;        /* 레벨별 파동 속도에 곱하는 전역 배수 (난이도 조절용) */
 } Tune;
@@ -94,13 +96,17 @@ typedef struct {
     int   atTerminal;
     unsigned avail;        /* 지금 터미널에서 장착 가능한 능력. 0 = 전부 */
     float spawnX, spawnY;
+    /* 마지막 터미널을 밟았을 때의 파동 위치. 죽으면 여기로 되돌린다.
+     * 파동이 터미널에서 "멈추기만" 하게 되면서, 죽으면 파동이 리셋되는 게
+     * 이득이 되어버렸다 — 체크포인트 당시 상황을 그대로 복원해서 막는다. */
+    float formatAtCheckpoint;
     int   hasDisk;         /* 이 스테이지의 디스크를 회수했는가 */
 
     /* 안내는 상태를 안 갖는다 — 힌트는 플레이어 위치의 함수라 렌더가 직접 계산한다 */
 
     /* 죽으면 바로 되살리지 않는다. 무슨 일이 일어났는지 보여줄 시간이 필요하다. */
-    float deathTimer;
-    int   deathCause;      /* DEATH_* */
+    float deathTimer, deathTimerMax;   /* 연출 진행도 계산에 둘 다 필요하다 */
+    int   deathCause;                  /* DEATH_* — NONE 이 아니면 죽어 있는 상태 */
 
     int   evJump, evDoubleJump, evDash, evWallJump, evLand, evDeny, evEquip;
     int   evCheckpoint, evDeath, evPad, evDisk;
@@ -110,6 +116,7 @@ typedef struct {
 typedef struct {
     int left, right, jumpHeld, jumpPressed, dashPressed;
     int toggleAbility;   /* -1 = 없음 */
+    int anyKey;          /* 아무 키나 눌렸는가 — 사망 후 리스폰에 쓴다 */
 } Input;
 
 void sim_new_game(World *w, const Tune *t);            /* 해금 상태까지 초기화 */
