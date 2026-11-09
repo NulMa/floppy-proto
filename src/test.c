@@ -81,6 +81,7 @@ static float reach(const Tune *t, float airTime, int dashing)
 typedef struct {
     float baseH, bootH, jump2H, bootJump2H;
     float baseD, bootD, dashD, jump2D, lowCeilD;
+    float padH, padD;          /* 점프패드 — 능력이 아니라 지형이 주는 값 */
 } Reach;
 
 static Reach reach_of(const Tune *t)
@@ -99,6 +100,13 @@ static Reach reach_of(const Tune *t)
     r.bootD  = reach(t, air_time(t, bv, 0.0f), 0);
     r.dashD  = reach(t, air_time_dashed(t, v0, 0.0f), 1);
     r.jump2D = reach(t, air_time_jump2(t, v0, 0.0f), 0);
+
+    /* ★ 점프패드는 **세로 기믹이 아니다.** 높이 올라간 만큼 체공이 길어지고,
+     *   체공이 길어진 만큼 가로로도 간다. "패드는 세로라서 가로 관문은 안 흐린다"는
+     *   틀렸다 — 아래 표가 그걸 보여준다. */
+    float pv = fabsf(t->padVelHold);
+    r.padH = rise_h(t, pv);
+    r.padD = reach(t, air_time(t, pv, 0.0f), 0);
 
     /* 저천장 2칸 통로 — 머리가 천장에 닿아 상승이 잘린다 */
     float head = 2.0f * TILE - PLAYER_H;
@@ -141,14 +149,74 @@ static int widest_gap(const World *w, int rowFrom, int rowTo, int x0, int x1)
         int floorHere = 0;
         for (int r = rowFrom; r <= rowTo; r++) {
             unsigned char t = w->map[r][c];
-            /* 원웨이·점프패드도 밟을 수 있으니 바닥으로 센다.
+            /* 원웨이·점프패드·무너짐 발판도 밟을 수 있으니 바닥으로 센다.
              * T_SOLID 만 보면 원웨이 섬을 구덩이로 잘못 잰다 */
-            if (t == T_SOLID || t == T_ONEWAY || t == T_PAD) floorHere = 1;
+            if (t == T_SOLID || t == T_ONEWAY || t == T_PAD || t == T_CRUMBLE) floorHere = 1;
         }
         if (!floorHere) { run++; if (run > best) best = run; }
         else run = 0;
     }
     return best;
+}
+
+/* 이 레벨이 avail 마스크로 터미널마다 도구를 제한하는가.
+ * 그런 스테이지는 "needs ≤ 8칸" 규칙에서 빠진다 — 갈아끼우는 것이 주제이기 때문이다. */
+static int uses_avail(const Level *L)
+{
+    for (int i = 0; i < L->termCount; i++) if (L->terms[i].avail) return 1;
+    return 0;
+}
+
+/* 위험 칸이 하나라도 있는 열인가 (가시·교대 가시). 밀도와 빈 구간을 재는 기준이다. */
+static int hazard_col(const World *w, int c)
+{
+    for (int r = 0; r < MAP_H; r++) {
+        unsigned char t = w->map[r][c];
+        if (t == T_SPIKE || t == T_SPIKE_A || t == T_SPIKE_B) return 1;
+    }
+    return 0;
+}
+
+static int count_tile(const World *w, const Level *L, unsigned char kind)
+{
+    int n = 0;
+    for (int r = 0; r < MAP_H; r++)
+        for (int c = 0; c < L->width; c++)
+            if (w->map[r][c] == kind) n++;
+    return n;
+}
+
+/* 진입 시점에 해금돼 있는 능력 (앞 스테이지들의 보상까지) */
+static unsigned unlocked_at(int levelIndex)
+{
+    unsigned m = AB_STARTING;
+    for (int i = 0; i < levelIndex; i++) m |= LEVELS[i].reward;
+    return m;
+}
+
+static int mask_cost(unsigned m)
+{
+    int c = 0;
+    for (int a = 0; a < AB_COUNT; a++) if (m & AB_BIT(a)) c += ABILITY_COST[a];
+    return c;
+}
+
+/* needs 를 채우고 남는 칸으로 만들 수 있는 **서로 다른 로드아웃 수**.
+ *
+ * ★ 이 값이 1 이면 그 스테이지에서는 고를 것이 없다 — 이 게임의 코어가 꺼진다.
+ *   너무 크면(9~11) 반대로 남는 칸에 뭘 넣든 상관없다는 뜻이라 그것도 선택이 아니다.
+ *   2~8 을 목표로 둔다. */
+static int loadout_options(int levelIndex)
+{
+    const Level *L = &LEVELS[levelIndex];
+    unsigned unl = unlocked_at(levelIndex);
+    int budget = CAP_SLOTS - mask_cost(L->needs);
+    int n = 0;
+    for (unsigned m = 0; m < (1u << AB_COUNT); m++) {
+        if (m & ~(unl & ~L->needs)) continue;      /* 아직 없거나 이미 필수인 건 제외 */
+        if (mask_cost(m) <= budget) n++;
+    }
+    return n;
 }
 
 static void ability_list(unsigned mask, char *out, int n)
@@ -170,13 +238,18 @@ int main(void)
     World w;
     char label[160], names[160];
 
-    printf("\n== 능력별 도달 범위 (tune.txt 기준) ==\n");
+    /* ★ tune.txt 를 **안 읽는다.** 코드 기본값(tune_defaults)으로 잰다 —
+     *   제출물은 tune.txt 없이 도는 단일 exe 라 그게 실제로 배포되는 값이다.
+     *   예전엔 여기 "tune.txt 기준"이라고 찍었는데 거짓말이었다 (2026-08-19). */
+    printf("\n== 능력별 도달 범위 (코드 기본값 tune_defaults 기준) ==\n");
     printf("  높이  맨몸 %.1f칸  boot %.1f칸  jump2 %.1f칸  boot+jump2 %.1f칸  grip 제한없음\n",
            R.baseH / TILE, R.bootH / TILE, R.jump2H / TILE, R.bootJump2H / TILE);
     printf("  거리  맨몸 %.1f칸  boot %.1f칸  dash %.1f칸  jump2 %.1f칸  저천장 %.1f칸\n",
            R.baseD / TILE, R.bootD / TILE, R.dashD / TILE, R.jump2D / TILE, R.lowCeilD / TILE);
     printf("        (코요테 %.0fpx 포함. 대시는 중력이 멈추는 것까지 반영한 값이다)\n",
            coyote_gain(&t));
+    printf("  패드  높이 %.1f칸  거리 %.1f칸   ← 능력이 아니라 지형이 준다\n",
+           R.padH / TILE, R.padD / TILE);
     printf("  낙차별 가로 도달거리 — 활공만 통과시키려면 이 사이를 노려야 한다\n");
     printf("    낙차   맨몸   boot  boot+dash   활공   boot+활공\n");
     for (int d = 3; d <= 7; d++) {
@@ -256,10 +329,58 @@ int main(void)
         snprintf(label, sizeof(label), "%s: 터미널이 전부 발판 위에 있다", L->id);
         check(termOK, label);
 
-        /* 디스크는 출구 근처여야 "챙길까 말까"를 클리어 직전에 정하게 된다.
-         * 단 용량을 먹는 디스크는 선택 회수물이 아니라 목표 그 자체라 예외다. */
-        snprintf(label, sizeof(label), "%s: 디스크가 출구에서 8칸 이내", L->id);
-        check(L->diskCol < 0 || L->diskCost > 0 || abs(L->diskCol - L->exitCol) <= 8, label);
+        /* ── 디스크 ── 2026-08-16 에 규칙을 **뒤집었다.**
+         *
+         * 예전 규칙은 "디스크가 출구 8칸 이내"였다. 그게 20 스테이지 중 18개에서
+         * 디스크를 출구 옆에 붙여놨고, 결과적으로 **위험/보상 층을 금지하고 있었다** —
+         * 회수가 선택이 아니라 통행세였다.
+         *
+         * 지금은 둘로 나눈다.
+         *   보상 스테이지 : 디스크가 곧 진행이다. 출구가 잠기므로(sim_exit_locked)
+         *                  어디 둬도 되지만, 놓치면 안 되니 경로 위에 둔다
+         *   나머지        : **실제 우회 비용**이 있어야 한다.
+         *                  가로로 10칸 넘게 떨어져 있거나, 4칸 넘게 위에 있거나 */
+        if (L->diskCol >= 0 && L->diskCost == 0 && L->reward == 0 && i >= 5) {
+            int dx = abs(L->diskCol - L->exitCol), dy = L->exitRow - L->diskRow;
+            snprintf(label, sizeof(label), "%s: 디스크 회수에 우회 비용이 있다 (가로 %d칸 · 위로 %d칸)",
+                     L->id, dx, dy);
+            check(dx >= 10 || dy >= 4, label);
+        }
+
+        /* ── 로드아웃 자유도 ──
+         *
+         * ★ needs 합이 12칸이면 유효 로드아웃이 **하나**가 된다. 예전에 s09·s18·s19·s20
+         *   넷이 그랬고, 그게 "무엇을 들고 갈까"라는 이 게임의 코어를 후반부에서
+         *   통째로 껐다. 8칸으로 묶으면 최소 4칸이 항상 플레이어 몫으로 남는다.
+         *   (avail 로 갈아끼우게 만드는 스테이지는 그게 주제이므로 면제) */
+        {
+            int nc = mask_cost(L->needs), opts = loadout_options(i);
+            int pool = mask_cost(unlocked_at(i));
+            snprintf(label, sizeof(label), "%s: needs 가 %d칸 (8칸 이하)", L->id, nc);
+            check(nc <= 8 || uses_avail(L), label);
+
+            /* 아직 해금된 걸 전부 들 수 있는 초반(합 ≤ 12칸)에는 고를 것이 없는 게 정상이다.
+             * 12칸을 넘긴 뒤부터가 진짜다 — 거기서 선택지가 1이면 코어가 꺼진 것이다. */
+            if (pool > CAP_SLOTS && !uses_avail(L)) {
+                snprintf(label, sizeof(label),
+                         "%s: 버릴 것을 고를 수 있다 (해금 %d칸 · 필수 %d칸 · %d가지)",
+                         L->id, pool, nc, opts);
+                check(opts >= 2, label);
+            }
+        }
+
+        /* ── 새 타일의 성립 조건 (2026-08-16) ── */
+        {
+            int upd = count_tile(&w, L, T_UPDRAFT);
+            int sa  = count_tile(&w, L, T_SPIKE_A), sb = count_tile(&w, L, T_SPIKE_B);
+            /* 기류는 활공이 없으면 못 쓴다. 아직 glide 가 안 풀린 스테이지에 두면
+             * 그냥 못 지나가는 벽이 된다 */
+            snprintf(label, sizeof(label), "%s: 기류를 두려면 glide 가 해금돼 있어야 한다", L->id);
+            check(upd == 0 || (unlocked_at(i) & AB_BIT(AB_GLIDE)), label);
+            /* 교대 가시는 **짝이 있어야** 의미가 있다. 한쪽만 두면 그냥 깜빡이는 가시다 */
+            snprintf(label, sizeof(label), "%s: 교대 가시는 A 와 B 가 짝을 이룬다", L->id);
+            check((sa == 0 && sb == 0) || (sa > 0 && sb > 0), label);
+        }
 
         if (L->diskCost > 0) {
             int left = CAP_SLOTS - L->diskCost;
@@ -278,44 +399,158 @@ int main(void)
         snprintf(label, sizeof(label), "%s: 힌트 앵커가 레벨 안에 있다", L->id);
         check(!badHint, label);
 
-        snprintf(label, sizeof(label), "%s: 파동보다 플레이어가 빠르다", L->id);
-        check(L->formatSpeed * t.formatScale < t.maxSpeed * 0.5f, label);
+        /* ★ 예전엔 상한이 maxSpeed*0.5 였다. 그게 **파동이 압박을 만들 수 있는 한계를
+         *   설계 규칙으로 못박고 있었다** — 어떤 스테이지도 실제로 쫓기지 않았다.
+         *   0.70 으로 올리고, 쉼 과금이 다 붙은 최고 속도도 0.90 아래로만 묶는다. */
+        float topSpeed = L->formatSpeed * t.formatScale * (1.0f + t.formatTax * (L->termCount - 1));
+        snprintf(label, sizeof(label), "%s: 기본 파동이 플레이어보다 느리다", L->id);
+        check(L->formatSpeed * t.formatScale < t.maxSpeed * 0.70f, label);
+        snprintf(label, sizeof(label), "%s: 쉼 과금이 다 붙어도 따라잡히지는 않는다 (%.0fpx/s)",
+                 L->id, topSpeed);
+        check(topSpeed < t.maxSpeed * 0.90f, label);
     }
 
-    /* ── 밸런스: 파동 압박 ──
+    /* ── 밀도와 빈 구간 ──────────────────────────────────────────────
      *
-     * 세로 이동 중에는 가로 진행이 0인데 파동은 계속 다가온다.
-     * 굴뚝을 오르는 동안 파동이 따라잡으면 그 스테이지는 클리어가 불가능해진다.
-     *
-     *   정지 허용 시간 = formatLead / formatSpeed
-     *   등반 시간      ≈ 세로 스팬 / 58px/s   (벽점프 1회 약 35px, 왕복 0.6초)
-     *
-     * 여유가 1.5배는 있어야 사람이 실수 한 번 하고도 올라간다. */
-    printf("\n== 파동 압박 ==\n");
-    printf("  %-14s %-6s %-8s %-8s %-8s %s\n", "레벨", "파동", "정지허용", "세로스팬", "등반추정", "여유");
+     * ★ 이 표가 2026-08-16 진단의 핵심이었다. 예전 값은 장애물 간격 10~70칸,
+     *   무위험 연속 구간 최대 42칸이었다. **화면이 32칸**이라 42칸이면
+     *   한 화면 반 동안 아무 일도 안 일어난다는 뜻이다. */
+    printf("\n== 밀도 ==\n");
+    printf("  %-14s %5s %6s %7s %9s %8s\n", "레벨", "폭", "위험열", "장애물", "장애간격", "최장무위험");
     for (int i = 0; i < LEVEL_COUNT; i++) {
         memset(&w, 0, sizeof(w));
         sim_load(&w, &t, i);
         const Level *L = sim_level(&w);
 
-        int lo = MAP_H, hi = -1;
+        int haz = 0, obst = 0, inHaz = 0, run = 0, bestSafe = 0;
         for (int c = 1; c < L->width - 1; c++) {
-            int s = surface_row(&w, c);
-            if (s < 0) continue;
-            if (s < lo) lo = s;
-            if (s > hi) hi = s;
+            if (hazard_col(&w, c)) {
+                haz++;
+                if (!inHaz) obst++;
+                inHaz = 1; run = 0;
+            } else {
+                inHaz = 0; run++;
+                if (run > bestSafe) bestSafe = run;
+            }
         }
-        float span    = (hi > lo) ? (float)(hi - lo) * TILE : 0.0f;
-        float stall   = t.formatLead / (L->formatSpeed * t.formatScale);
-        float climb   = span / 58.0f;
-        float margin  = (climb > 0.05f) ? stall / climb : 99.0f;
+        /* ★ 간격은 **폭이 아니라 안전한 땅**을 장애물 수로 나눈다.
+         *   폭으로 나누면 s04(16칸 구덩이 세 개)처럼 장애물이 거대한 레벨이
+         *   "비었다"로 잘못 잡힌다 — 그 레벨은 절반이 구덩이인데도. */
+        int safeCols = (L->width - 2) - haz;
+        float spacing = obst ? (float)safeCols / obst : 999.0f;
+        printf("  %-14s %4d %5d%% %6d %8.1f %8d%s\n",
+               L->file, L->width, 100 * haz / (L->width - 2), obst, spacing, bestSafe,
+               bestSafe > 20 ? "  <- 비었다" : "");
 
-        printf("  %-14s %4.0f  %6.1fs  %5.0fpx  %6.1fs  %5.1fx%s\n",
-               L->file, L->formatSpeed, stall, span, climb, margin,
-               margin < 1.5f ? "   <- 빠듯하다" : "");
+        snprintf(label, sizeof(label), "%s: 장애물 사이 안전지대가 13칸 이하 (%.1f)", L->id, spacing);
+        check(spacing <= 13.0f, label);
+        snprintf(label, sizeof(label), "%s: 무위험 연속 구간이 20칸 이하 (%d)", L->id, bestSafe);
+        check(bestSafe <= 20, label);
+    }
 
-        snprintf(label, sizeof(label), "%s: 등반 중에 파동에 잡히지 않는다", L->id);
-        check(margin >= 1.5f, label);
+    /* ── 밸런스: 파동 압박 ────────────────────────────────────────────
+     *
+     * ★★ 2026-08-16 에 모델을 통째로 바꿨다.
+     *
+     *   예전 모델은 "레벨 전체의 세로 스팬을 오르는 시간 vs formatLead/속도"였다.
+     *   두 가지가 틀렸다.
+     *     ① **가로 압박을 아예 안 쟀다.** 실제로 재보니 여유가 3.4~10.9배였다 —
+     *        즉 20 스테이지 중 어디서도 파동이 위협이 된 적이 없다
+     *     ② 하한(1.5배)만 있고 **상한이 없어서** 11배도 99배도 통과했다
+     *
+     *   새 모델은 **터미널 사이 한 구간을 실제로 뛰어본다.**
+     *     생존조건 :  S + D  >  v × T
+     *       S = 출발 시 파동과의 간격 (터미널이 formatHold 를 보장한다)
+     *       D = 다음 터미널(또는 출구)까지의 가로 거리
+     *       T = D/실주행속도 + 등반높이/58   (실주행 = maxSpeed 의 75%.
+     *           점프·감속·착지 때문에 최고속도로는 못 달린다)
+     *       v = 그 구간의 파동 속도 (쉼 과금이 누적된 값)
+     *
+     *   여유 = (S+D) / (v×T). **1.25 아래면 클리어 불가에 가깝고,
+     *   2.6 위면 파동이 있으나 마나다.** 양쪽을 다 잡는다. */
+    printf("\n== 파동 압박 (구간별 최악값) ==\n");
+    printf("  %-14s %-6s %-7s %-7s %-8s %s\n", "레벨", "파동", "최악구간", "등반", "여유", "");
+    {
+        const float runSpeed = 0.75f;      /* 실주행 속도 = maxSpeed × 이것 */
+        for (int i = 0; i < LEVEL_COUNT; i++) {
+            memset(&w, 0, sizeof(w));
+            sim_load(&w, &t, i);
+            const Level *L = sim_level(&w);
+
+            float worst = 99.0f;
+            int   worstAt = 0, worstRise = 0;
+
+            for (int k = 0; k < L->termCount; k++) {
+                int x0 = L->terms[k].x;
+                /* 이 터미널 다음으로 오른쪽에 있는 터미널 (없으면 출구) */
+                int x1 = L->exitCol;
+                for (int m = 0; m < L->termCount; m++)
+                    if (L->terms[m].x > x0 && L->terms[m].x < x1) x1 = L->terms[m].x;
+                if (x1 <= x0) continue;
+
+                /* ── 이 구간에서 **실제로 올라가야 하는** 높이 ──
+                 *
+                 * ★ 단순히 "구간 안 가장 높은 표면"으로 재면 s15 처럼 **선택 회수용
+                 *   굴뚝**이 있는 레벨이 잘못 잡힌다 — 안 올라가도 되는 곳인데
+                 *   올라가는 것으로 친다. 두 가지를 나눠 본다.
+                 *     ① 다음 체크포인트까지의 **순 상승** — 이건 언제나 해야 한다
+                 *     ② 바닥 높이로 쭉 갈 수 있으면(지상 루트가 있으면) 중간 봉우리는 무시,
+                 *        중간에 허공이 있으면 그 봉우리를 넘는 수밖에 없으므로 포함 */
+                int base = L->terms[k].y + 1;
+                int endRow = (x1 == L->exitCol) ? L->exitRow + 1 : -1;
+                if (endRow < 0)
+                    for (int m = 0; m < L->termCount; m++)
+                        if (L->terms[m].x == x1) endRow = L->terms[m].y + 1;
+                if (endRow < 0) endRow = base;
+
+                int rise = base - endRow; if (rise < 0) rise = 0;
+                int peak = 0, ground = 1;
+                for (int c = x0; c <= x1 && c < L->width; c++) {
+                    int s = surface_row(&w, c);
+                    if (s >= 0 && base - s > peak) peak = base - s;
+                    /* ★ 지상 루트 판정은 **바닥 근처에 디딜 것이 있는가**로 본다.
+                     *   surface_row(가장 위 표면)로 보면 안 된다 — s15 의 굴뚝처럼
+                     *   머리 위로 벽이 솟아 있어도 그 아래로 그냥 걸어가는 경우를
+                     *   "올라가야 한다"고 잘못 읽는다. */
+                    int floorNear = 0;
+                    for (int r = base - 1; r <= base + 1 && r < MAP_H; r++) {
+                        if (r < 0) continue;
+                        unsigned char tt = w.map[r][c];
+                        if (tt == T_SOLID || tt == T_ONEWAY || tt == T_PAD || tt == T_CRUMBLE)
+                            floorNear = 1;
+                    }
+                    if (!floorNear) ground = 0;
+                }
+                if (!ground && peak > rise) rise = peak;
+
+                /* ── 오르는 수단에 따라 등반 속도가 다르다 ──
+                 *   벽타기 58px/s (벽점프 1회 약 35px, 왕복 0.6초)
+                 *   상승 기류는 tune 값 그대로, 점프패드는 사실상 쏘아 올린다 */
+                float climbSpeed = 58.0f;
+                for (int c = x0; c <= x1 && c < L->width; c++)
+                    for (int r = 0; r < MAP_H; r++) {
+                        if (w.map[r][c] == T_UPDRAFT && climbSpeed < t.updraftRise)
+                            climbSpeed = t.updraftRise;
+                        if (w.map[r][c] == T_PAD) climbSpeed = 220.0f;
+                    }
+
+                float D = (float)(x1 - x0) * TILE;
+                float T = D / (t.maxSpeed * runSpeed) + (float)(rise * TILE) / climbSpeed;
+                float v = L->formatSpeed * t.formatScale * (1.0f + t.formatTax * k);
+                float margin = (T > 0.05f) ? (t.formatHold + D) / (v * T) : 99.0f;
+
+                if (margin < worst) { worst = margin; worstAt = x0; worstRise = rise; }
+            }
+
+            printf("  %-14s %4.0f  x%-6d %4d칸 %6.2fx  %s\n",
+                   L->file, L->formatSpeed, worstAt, worstRise, worst,
+                   worst < 1.25f ? "<- 빠듯하다" : (worst > 2.6f ? "<- 헐겁다" : ""));
+
+            snprintf(label, sizeof(label), "%s: 어느 구간도 파동에 못 잡힌다 (%.2fx)", L->id, worst);
+            check(worst >= 1.25f, label);
+            snprintf(label, sizeof(label), "%s: 파동이 실제로 압박이 된다 (%.2fx ≤ 2.6)", L->id, worst);
+            check(worst <= 2.6f, label);
+        }
     }
 
     /* ── 밸런스: 티어 간 난이도 곡선 ──
@@ -376,7 +611,7 @@ int main(void)
     {
         const Level *L = sim_level(&w);
         float step  = (float)(surface_row(&w, 2) - surface_row(&w, 10)) * TILE;
-        float ledge = (float)(surface_row(&w, 2) - surface_row(&w, 20)) * TILE;
+        float ledge = (float)(surface_row(&w, 2) - surface_row(&w, 22)) * TILE;
         float gap   = (float)widest_gap(&w, 15, 17, 1, L->width - 2) * TILE;
         printf("  계단 %.0fpx / 구덩이 %.0fpx / 턱 %.0fpx\n", step, gap, ledge);
         check(step  <= R.baseH, "계단은 맨몸으로 넘어진다");
@@ -395,9 +630,13 @@ int main(void)
     sim_load(&w, &t, 1);
     {
         float gap = (float)widest_gap(&w, 15, 17, 1, LEVELS[1].width - 2) * TILE;
-        printf("  02 최대 구덩이 %.0fpx\n", gap);
-        check(gap >  R.bootD, "02: boot 로는 못 건넌다");
-        check(gap <= R.dashD, "02: dash 로 건너진다");
+        printf("  02 최대 구덩이 %.0fpx  (boot %.0f · jump2 %.0f · dash %.0f)\n",
+               gap, R.bootD, R.jump2D, R.dashD);
+        check(gap >  R.bootD,  "02: boot 로는 못 건넌다");
+        /* ★ 이 줄이 2026-08-16 에 추가됐다. 예전엔 8칸(128px)이었는데 jump2(134px)로도
+         *   건너졌다 — 즉 "dash 관문"이 아니었다. dash 만 여는 폭은 9~10칸뿐이다. */
+        check(gap >  R.jump2D, "02: jump2 로도 못 건넌다 (진짜 dash 관문)");
+        check(gap <= R.dashD,  "02: dash 로 건너진다");
     }
     memset(&w, 0, sizeof(w));
     sim_load(&w, &t, 2);
@@ -412,6 +651,21 @@ int main(void)
         check(gap >  R.lowCeilD, "03: 저천장에서는 점프로 못 건넌다");
         check(gap <= R.dashD,    "03: dash 로 건너진다");
         check(gap >  R.jump2D * 0.0f + R.lowCeilD, "03: jump2 를 얻어도 여기는 안 통한다");
+
+        /* ★ 교대 가시는 **저천장 아래**에 있어야 성립한다.
+         *   개방 지형이면 그냥 뛰어넘어서 타이밍이 사라진다. */
+        int wide = 0, bad = 0;
+        for (int c = 1; c < LEVELS[2].width - 1; c++)
+            for (int r = 1; r < MAP_H; r++) {
+                if (w.map[r][c] != T_SPIKE_A && w.map[r][c] != T_SPIKE_B) continue;
+                wide++;
+                int ceil = -1;
+                for (int rr = r - 1; rr >= 0; rr--) if (w.map[rr][c] == T_SOLID) { ceil = rr; break; }
+                if (ceil < 0 || (r - ceil - 1) > 2) bad++;
+            }
+        printf("  03 교대 가시 %d칸 / 저천장 밖 %d칸\n", wide, bad);
+        check(wide > 0, "03: 교대 가시가 있다");
+        check(bad == 0, "03: 교대 가시가 전부 저천장 아래에 있다 (뛰어넘을 수 없다)");
     }
 
     /* ── 04 · 05: 활공이 필요한 하강인가 ── */
@@ -450,21 +704,28 @@ int main(void)
         memset(&w, 0, sizeof(w));
         sim_load(&w, &t, 6);
         int floorR = surface_row(&w, 2);
-        float s1step = (float)(floorR - surface_row(&w, 13)) * TILE;
-        float s2gap  = (float)widest_gap(&w, 15, 17, 32, 61) * TILE;
-        float s3gap  = (float)widest_gap(&w, 15, 17, 62, 94) * TILE;
-        float s3top  = (float)(floorR - surface_row(&w, 70)) * TILE;
+        float s1step = (float)(floorR - surface_row(&w, 13)) * TILE;   /* 첫 디딤 발판 */
+        float s1wall = (float)(floorR - surface_row(&w, 20)) * TILE;   /* 장벽 꼭대기 */
+        float s2gap  = (float)widest_gap(&w, 15, 17, 32, 75) * TILE;
+        float s3gap  = (float)widest_gap(&w, 15, 17, 76, 114) * TILE;
+        float s3top  = (float)(floorR - surface_row(&w, 80)) * TILE;   /* 위층 */
         int blockBottom = 0;
-        for (int r = MAP_H - 1; r >= 0; r--) if (w.map[r][62] == T_SOLID && r < 14) { blockBottom = r; break; }
+        for (int r = MAP_H - 1; r >= 0; r--) if (w.map[r][76] == T_SOLID && r < 14) { blockBottom = r; break; }
         float faceReach = ((float)floorR * TILE - PLAYER_H) - (float)(blockBottom + 1) * TILE;
 
-        printf("  발판 %.1f칸 / 구덩이 %.1f칸 / 통로 %.1f칸 / 위층 %.1f칸 / 벽면까지 %.0fpx\n",
-               s1step / TILE, s2gap / TILE, s3gap / TILE, s3top / TILE, faceReach);
+        printf("  발판 %.1f칸 / 장벽 %.1f칸 / 구덩이 %.1f칸 / 통로 %.1f칸 / 위층 %.1f칸 / 벽면까지 %.0fpx\n",
+               s1step / TILE, s1wall / TILE, s2gap / TILE, s3gap / TILE, s3top / TILE, faceReach);
         check(s1step > R.baseH,     "구간1: 맨몸 불가");
+        check(s1wall > R.jump2H,    "구간1: 장벽은 점프로 못 넘는다 (발판을 밟거나 벽을 타야 한다)");
         check(s2gap  > R.baseD,     "구간2: 맨몸 불가");
+        /* ★ 2026-08-16 추가. 예전 구간2 는 6칸이라 jump2(8.4칸)로 그냥 건너졌다 —
+         *   "구간마다 다른 능력"이라는 이 스테이지의 전제가 거기서 깨져 있었다. */
+        check(s2gap  > R.jump2D,    "구간2: jump2 로도 못 건넌다 (dash 전용)");
+        check(s2gap <= R.dashD,     "구간2: dash 로는 건너진다");
         check(s3top  > R.jump2H,    "구간3: 위층은 점프로 못 오른다");
         check(faceReach <= R.baseH, "구간3: 맨몸 점프로 벽면에 손이 닿는다 (grip 루트 성립)");
         check(s3gap  > R.lowCeilD,  "구간3: 저천장 통로는 점프로 못 건넌다");
+        check(s3gap <= R.dashD,     "구간3: 통로는 dash 로 건너진다");
 
         int masterKey = 0;
         printf("\n  단독 통과 판정\n");
@@ -534,7 +795,12 @@ int main(void)
      *   턱이 아니라 "구덩이 위에 뜬 원웨이 선반"이어야 한다. 이 절이 그걸 지킨다. */
     printf("\n== jump2 관문 (원웨이 선반) ==\n");
     {
-        const int gate[] = { 8, 19 };   /* s09, s20 */
+        const int gate[] = { 8 };       /* s09.
+                                         * ★ 예전엔 s20 도 여기 있었다. 그런데 그러면
+                                         *   s20 의 needs 가 boot+dash+jump2 = 정확히 12칸이 되어
+                                         *   로드아웃 선택지가 0 이 됐다. 클라이맥스에서
+                                         *   코어 메커닉이 꺼지는 셈이라 s20 의 관문을
+                                         *   9·10칸 구덩이로 바꿨다 (아래 s20 절에서 따로 검사한다). */
         float flatDash = reach_drop_dash(&t, 0.0f, 1);   /* boot+dash 로 닿는 최대 가로 */
         for (int k = 0; k < (int)(sizeof(gate) / sizeof(gate[0])); k++) {
             memset(&w, 0, sizeof(w));
@@ -577,6 +843,41 @@ int main(void)
             snprintf(label, sizeof(label), "%s: 건너편 벽이 멀어서 grip 으로 못 돌아간다", L->id);
             check(wallGap > flatDash, label);
         }
+    }
+
+    /* ── 20 ME.IMG: 디스크를 담은 뒤의 길 ──────────────────────────────
+     *
+     * ★ 이 스테이지만 목표가 용량을 먹는다 (9칸). 담으면 3칸 = boot.exe 하나만 남는다.
+     *   그러면 **디스크 지점부터 출구까지가 맨몸+boot 로 통과 가능해야 한다.**
+     *   아니면 담는 순간 게임이 끝난다 — 되돌아갈 수도 없다(파동이 오른쪽에서 온다).
+     *
+     *   예전엔 이 검사가 없었다. `D-36` 이 "성립 조건: 돌아오는 경로가 남는 칸의
+     *   능력만으로 통과 가능해야 한다. test.bat 에 검사 추가 필요"라고 적어둔 그것이다. */
+    printf("\n== 20 ME.IMG: 디스크를 담은 뒤 ==\n");
+    {
+        memset(&w, 0, sizeof(w));
+        sim_load(&w, &t, LEVEL_COUNT - 1);
+        const Level *L = sim_level(&w);
+        int left = CAP_SLOTS - L->diskCost;
+
+        int gap = widest_gap(&w, 1, 17, L->diskCol, L->width - 2);
+        /* 디스크 이후 구간의 최대 오르막 */
+        int prev = -1, rise = 0;
+        for (int c = L->diskCol; c < L->width - 1; c++) {
+            int s = surface_row(&w, c);
+            if (s < 0) continue;
+            if (prev >= 0 && prev - s > rise) rise = prev - s;
+            prev = s;
+        }
+        printf("  디스크 %d칸 → 남는 %d칸 (boot=%d) · 이후 최대 구덩이 %d칸 · 최대 턱 %d칸\n",
+               L->diskCost, left, ABILITY_COST[AB_BOOT], gap, rise);
+        printf("  boot 거리 %.1f칸 / boot 높이 %.1f칸\n", R.bootD / TILE, R.bootH / TILE);
+
+        check(left >= ABILITY_COST[AB_BOOT], "s20: 디스크를 담아도 boot 는 들 수 있다");
+        check(left <  ABILITY_COST[AB_BOOT] + ABILITY_COST[AB_DASH],
+              "s20: boot 말고는 아무것도 못 든다 (그래야 결말이 성립한다)");
+        check((float)gap  * TILE <= R.bootD, "s20: 디스크 이후 구덩이를 boot 로 건널 수 있다");
+        check((float)rise * TILE <= R.bootH, "s20: 디스크 이후 턱을 boot 로 오를 수 있다");
     }
 
     /* ── 이벤트 ────────────────────────────────────────────────────
@@ -622,6 +923,376 @@ int main(void)
         printf("  점프 후 3초: 체공 %d프레임 · 착지 %d회 (기대 >0 / 1)\n", airborne, landsAfter);
         check(airborne > 0,      "점프하면 실제로 뜬다");
         check(landsAfter == 1,   "점프 후 착지 이벤트가 정확히 1회");
+    }
+
+    /* ── 점프패드 ──────────────────────────────────────────────────
+     *
+     * ★ 밟는 것만으로는 안 튄다. **그 위에서 점프해야** 튄다 (2026-08-15 변경).
+     *   지나가다 튀면 조작이 아니라 사고다. 그리고 패드로 뜬 것은 점프가 아니라서
+     *   일반 점프컷에 걸리면 안 된다 — 손을 떼도 보통 점프보다는 높아야 한다. */
+    printf("\n== 점프패드 ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        Input idle = { 0 }, hold = { 0 }, press = { 0 };
+        hold.jumpHeld = 1;
+        press.jumpPressed = 1; press.jumpHeld = 1;
+
+        /* 좌표를 박아두면 레벨을 옮길 때 조용히 깨진다. 맵에서 찾는다. */
+        memset(&w, 0, sizeof(w));
+        sim_load(&w, &t, 0);
+        int pr = -1, pc = -1;
+        for (int r = 0; r < MAP_H && pr < 0; r++)
+            for (int c = 0; c < MAP_W; c++)
+                if (w.map[r][c] == T_PAD) { pr = r; pc = c; break; }
+        check(pr >= 0, "s01 에 점프패드가 있다");
+
+        /* 기준선 — 평지에서의 맨몸 점프 */
+        float hNormal = 0.0f;
+        {
+            for (int f = 0; f < 60; f++) sim_step(&w, &t, &idle, dt);
+            float y0 = w.p.y, top = w.p.y;
+            sim_step(&w, &t, &press, dt);
+            for (int f = 0; f < 120; f++) { sim_step(&w, &t, &hold, dt); if (w.p.y < top) top = w.p.y; }
+            hNormal = y0 - top;
+        }
+
+        if (pr >= 0) {
+            float hHold = 0.0f, hTap = 0.0f;
+            int bounced = 0;
+
+            /* 1) 그냥 서 있기 — 안 튀어야 한다 */
+            w.p.x = (float)(pc * TILE); w.p.y = (float)(pr * TILE - PLAYER_H);
+            w.p.vx = w.p.vy = 0.0f;
+            for (int f = 0; f < 120; f++) { sim_step(&w, &t, &idle, dt); if (w.evPad) bounced = 1; }
+            check(!bounced,      "패드를 밟고 서 있기만 하면 안 튄다");
+            check(w.p.onGround,  "패드 위에 그냥 서 있을 수 있다");
+
+            /* 2) 누른 채 점프 */
+            w.p.x = (float)(pc * TILE); w.p.y = (float)(pr * TILE - PLAYER_H);
+            w.p.vx = w.p.vy = 0.0f;
+            sim_step(&w, &t, &idle, dt);
+            {
+                float y0 = w.p.y, top = w.p.y;
+                sim_step(&w, &t, &press, dt);
+                check(w.evPad, "패드 위에서 점프하면 패드가 발동한다");
+                for (int f = 0; f < 150; f++) { sim_step(&w, &t, &hold, dt); if (w.p.y < top) top = w.p.y; }
+                hHold = y0 - top;
+            }
+
+            /* 3) 누르고 바로 떼기 */
+            w.p.x = (float)(pc * TILE); w.p.y = (float)(pr * TILE - PLAYER_H);
+            w.p.vx = w.p.vy = 0.0f;
+            sim_step(&w, &t, &idle, dt);
+            {
+                float y0 = w.p.y, top = w.p.y;
+                sim_step(&w, &t, &press, dt);
+                for (int f = 0; f < 150; f++) { sim_step(&w, &t, &idle, dt); if (w.p.y < top) top = w.p.y; }
+                hTap = y0 - top;
+            }
+
+            printf("  맨몸 점프 %.0fpx / 패드(누른 채) %.0fpx / 패드(떼기) %.0fpx\n",
+                   hNormal, hHold, hTap);
+            check(hHold > hTap,    "패드는 누르고 있으면 더 높이 튄다");
+            check(hTap  > hNormal, "패드는 손을 떼도 맨몸 점프보다 높다");
+        }
+    }
+
+    /* ── 점프패드와 관문의 거리 ────────────────────────────────────
+     *
+     * ★ 패드는 **세로 기믹이 아니다.** 위 표대로 가로 10.1칸을 준다 — dash(10.2칸)와
+     *   사실상 같고 jump2(8.4칸)·boot(6.3칸)보다 멀리 간다. 높이도 9.4칸으로
+     *   boot+jump2(6.3칸)를 넘는다. **패드 하나가 마스터키다.**
+     *
+     *   그래서 "패드는 세로라 가로 관문은 안 흐린다"는 성립하지 않는다.
+     *   대신 **거리**로 관리한다: 패드 사거리 안에 맨몸으로 못 건너는 구덩이가 없으면,
+     *   그 패드는 어떤 관문도 대신 열어주지 못한다. */
+    printf("\n== 점프패드와 관문의 거리 ==\n");
+    {
+        int padReach = (int)(R.padD / TILE) + 1;    /* 11칸 */
+        for (int i = 0; i < LEVEL_COUNT; i++) {
+            memset(&w, 0, sizeof(w));
+            sim_load(&w, &t, i);
+            const Level *L = sim_level(&w);
+            for (int r = 0; r < MAP_H; r++)
+                for (int c = 0; c < MAP_W; c++) {
+                    if (w.map[r][c] != T_PAD) continue;
+                    int x0 = c - padReach, x1 = c + padReach;
+                    if (x0 < 1) x0 = 1;
+                    if (x1 > L->width - 2) x1 = L->width - 2;
+                    int gap = widest_gap(&w, 1, 17, x0, x1);
+
+                    /* s10 만 예외다. 마지막 7칸 구덩이는 **패드로 건너라고** 만든 구간이고
+                     * (`레벨구성.md` §10 "네가 아니라 레벨이 속도를 준다"), 그래서
+                     * s10 의 `needs dash` 는 그 구덩이에 관해서는 강제가 아니다.
+                     * 예외를 지우고 싶으면 패드를 옮기는 게 아니라 **구덩이를 넓혀야** 한다. */
+                    int intended = (strcmp(L->id, "s10") == 0);
+
+                    printf("  [%s] 패드 x%-2d  사거리 %d칸 안의 최대 구덩이 %d칸 (맨몸 %.1f칸)%s\n",
+                           L->id, c, padReach, gap, R.baseD / TILE,
+                           (gap * TILE > R.baseD)
+                               ? (intended ? "   <- 의도된 패드 건너기 (s10)" : "   <- 관문을 대신 열 수 있다")
+                               : "");
+                    if (intended) continue;
+                    snprintf(label, sizeof(label),
+                             "%s: 패드(x%d) 사거리 안에 맨몸으로 못 건너는 구덩이가 없다", L->id, c);
+                    check(gap * TILE <= R.baseD, label);
+                }
+        }
+    }
+
+    /* ── 새 지형 기믹이 실제로 동작하는가 (2026-08-16) ──────────────────
+     *
+     * ★ 위쪽 절들은 전부 **지형의 모양**을 본다. 모양이 맞아도 규칙이 안 돌면
+     *   레벨은 통과하고 게임은 망가진다. 여기서는 sim 을 실제로 돌린다.
+     *   (`evLand` 가 초당 60번 켜지던 버그를 잡아낸 것도 이런 절이었다) */
+    printf("\n== 교대 가시 ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        memset(&w, 0, sizeof(w));
+        w.unlocked = AB_ALL;
+        sim_load(&w, &t, 2);                       /* s03 — 교대 가시의 교실 */
+
+        w.time = 0.0f;
+        check(sim_spike_phase(&w, &t) == T_SPIKE_A, "t=0 에는 A 가 켜져 있다");
+        w.time = t.spikeCycle * 1.5f;
+        check(sim_spike_phase(&w, &t) == T_SPIKE_B, "한 주기 뒤에는 B 가 켜져 있다");
+        w.time = t.spikeCycle * 2.5f;
+        check(sim_spike_phase(&w, &t) == T_SPIKE_A, "두 주기 뒤에는 다시 A");
+
+        /* A 칸 위에 세워놓고 위상만 바꿔본다 */
+        int ar = -1, ac = -1;
+        for (int r = 1; r < MAP_H && ar < 0; r++)
+            for (int c = 1; c < LEVELS[2].width - 1; c++)
+                if (w.map[r][c] == T_SPIKE_A) { ar = r; ac = c; break; }
+        check(ar >= 0, "s03 에 A 가시가 있다");
+        if (ar >= 0) {
+            Input idle = { 0 };
+            /* 위상 A — 밟으면 죽는다 */
+            w.p.x = (float)(ac * TILE + 2); w.p.y = (float)(ar * TILE);
+            w.p.vx = w.p.vy = 0.0f;
+            w.formatX = -9999.0f; w.deathCause = DEATH_NONE; w.time = 0.0f;
+            sim_step(&w, &t, &idle, dt);
+            check(w.deathCause == DEATH_SPIKE, "켜져 있는 쪽에 닿으면 죽는다");
+
+            /* 위상 B — 같은 칸이 그냥 빈 칸이 된다 */
+            w.p.x = (float)(ac * TILE + 2); w.p.y = (float)(ar * TILE);
+            w.p.vx = w.p.vy = 0.0f;
+            w.formatX = -9999.0f; w.deathCause = DEATH_NONE;
+            w.time = t.spikeCycle * 1.2f;
+            sim_step(&w, &t, &idle, dt);
+            check(w.deathCause == DEATH_NONE, "꺼져 있는 쪽은 그냥 지나간다");
+        }
+    }
+
+    printf("\n== 상승 기류 ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        Input hold = { 0 }; hold.jumpHeld = 1;
+        int ur = -1, uc = -1;
+
+        memset(&w, 0, sizeof(w));
+        w.unlocked = AB_ALL;
+        sim_load(&w, &t, 3);                       /* s04 — 기류의 교실 */
+        for (int r = 1; r < MAP_H && ur < 0; r++)
+            for (int c = 1; c < LEVELS[3].width - 1; c++)
+                if (w.map[r][c] == T_UPDRAFT) { ur = r; uc = c; break; }
+        check(ur >= 0, "s04 에 기류가 있다");
+
+        if (ur >= 0) {
+            float withGlide, without;
+            /* 활공을 들고 있으면 떠오른다 */
+            w.p.has[AB_GLIDE] = 1;
+            w.p.x = (float)(uc * TILE + 2); w.p.y = (float)((ur + 3) * TILE);
+            w.p.vx = w.p.vy = 0.0f; w.p.onGround = 0;
+            w.formatX = -9999.0f;
+            {
+                float y0 = w.p.y;
+                for (int f = 0; f < 40 && w.deathCause == DEATH_NONE; f++)
+                    sim_step(&w, &t, &hold, dt);
+                withGlide = y0 - w.p.y;
+            }
+            /* 없으면 그냥 떨어진다 — 공짜 엘리베이터가 되면 세로 관문이 다 열린다 */
+            sim_load(&w, &t, 3);
+            w.p.has[AB_GLIDE] = 0;
+            w.p.x = (float)(uc * TILE + 2); w.p.y = (float)((ur + 3) * TILE);
+            w.p.vx = w.p.vy = 0.0f; w.p.onGround = 0;
+            w.formatX = -9999.0f; w.deathCause = DEATH_NONE;
+            {
+                float y0 = w.p.y;
+                for (int f = 0; f < 40 && w.deathCause == DEATH_NONE; f++)
+                    sim_step(&w, &t, &hold, dt);
+                without = y0 - w.p.y;
+            }
+            printf("  40프레임 동안 활공 있음 %+.0fpx / 없음 %+.0fpx (양수 = 상승)\n",
+                   withGlide, without);
+            check(withGlide > 30.0f, "기류: 활공 중이면 떠오른다");
+            check(without   < 0.0f,  "기류: 활공이 없으면 그냥 떨어진다");
+        }
+    }
+
+    printf("\n== 무너지는 발판 ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        Input idle = { 0 };
+        int cr = -1, cc = -1;
+
+        memset(&w, 0, sizeof(w));
+        w.unlocked = AB_ALL;
+        sim_load(&w, &t, 6);                       /* s07 — 무너짐의 교실 */
+        for (int r = 1; r < MAP_H && cr < 0; r++)
+            for (int c = 1; c < LEVELS[6].width - 1; c++)
+                if (w.map[r][c] == T_CRUMBLE) { cr = r; cc = c; break; }
+        check(cr >= 0, "s07 에 무너지는 발판이 있다");
+
+        if (cr >= 0) {
+            w.p.x = (float)(cc * TILE + 2);
+            w.p.y = (float)(cr * TILE - PLAYER_H);
+            w.p.vx = w.p.vy = 0.0f;
+            w.formatX = -9999.0f;
+
+            sim_step(&w, &t, &idle, dt);
+            check(w.p.onGround,          "무너지기 전에는 밟고 설 수 있다");
+            check(w.evCrumble,           "밟은 **그 순간** 이벤트가 난다 (소리가 인과를 만든다)");
+            check(w.map[cr][cc] == T_CRUMBLE, "밟자마자 사라지지는 않는다");
+
+            int frames = (int)((t.crumbleDelay + 0.2f) / dt);
+            for (int f = 0; f < frames; f++) sim_step(&w, &t, &idle, dt);
+            check(w.map[cr][cc] == T_EMPTY, "crumbleDelay 뒤에 사라진다");
+
+            /* ★ 되살아날 때 **원래대로 돌려놓아야 한다.** 안 그러면 두 번째 시도부터는
+             *   발판이 없는 레벨이 된다 — 시작하자마자 통과 불가다. */
+            w.p.y = (float)(MAP_H * TILE + 100);   /* 낙사시킨다 */
+            sim_step(&w, &t, &idle, dt);
+            check(w.deathCause == DEATH_FALL, "떨어지면 죽는다");
+            Input any = { 0 }; any.anyKey = 1;
+            for (int f = 0; f < (int)(t.deathFreeze / dt) + 4; f++) sim_step(&w, &t, &any, dt);
+            check(w.deathCause == DEATH_NONE,  "되살아난다");
+            check(w.map[cr][cc] == T_CRUMBLE,  "되살아나면 무너진 발판이 원래대로 돌아온다");
+            check(w.crumbleCount == 0,         "무너짐 목록도 비워진다");
+        }
+    }
+
+    printf("\n== 파동 규칙 (쉼 과금 · 사망 페널티) ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        Input idle = { 0 };
+
+        memset(&w, 0, sizeof(w));
+        w.unlocked = AB_ALL;
+        sim_load(&w, &t, 9);                       /* s10 — 터미널이 둘뿐인 속도 스테이지 */
+        const Level *L = sim_level(&w);
+
+        /* 쉼 과금 — 터미널에 **새로 올라설 때마다** 는다.
+         * ★ 스폰 지점은 터미널 **옆**이다 (스폰 x2, 터미널 x3). 걸어 올라가야 한다. */
+        w.p.x = (float)(L->terms[0].x * TILE + 2);
+        w.p.y = (float)(L->terms[0].y * TILE);
+        for (int f = 0; f < 30; f++) sim_step(&w, &t, &idle, dt);
+        printf("  터미널 위 정지 횟수 %d\n", w.formatStops);
+        check(w.atTerminal,        "터미널 위에 서 있다");
+        check(w.formatStops == 1,  "터미널에 올라서면 정지 1회로 센다");
+
+        /* 떠났다가 다시 올라오면 또 센다 — 그게 과금의 기준이다 */
+        w.p.x = (float)((L->terms[0].x + 4) * TILE);
+        for (int f = 0; f < 10; f++) sim_step(&w, &t, &idle, dt);
+        w.p.x = (float)(L->terms[0].x * TILE + 2);
+        for (int f = 0; f < 10; f++) sim_step(&w, &t, &idle, dt);
+        check(w.formatStops == 2, "떠났다가 돌아오면 한 번 더 센다");
+
+        float v1 = sim_format_speed(&w, &t, 1);
+        float v4 = sim_format_speed(&w, &t, 4);
+        printf("  파동 속도  1회 정지 %.1f px/s → 4회 정지 %.1f px/s\n", v1, v4);
+        check(v1 == L->formatSpeed * t.formatScale, "첫 정지는 공짜다 (스폰이 터미널 위라 억울하다)");
+        check(v4 > v1, "쉬면 쉴수록 파동이 빨라진다");
+
+        /* 터미널은 멈추되 최소 간격을 보장한다 */
+        w.formatX = w.p.x - 5.0f;                  /* 파동이 바짝 붙은 상태 */
+        sim_step(&w, &t, &idle, dt);
+        printf("  붙은 파동이 터미널에서 %.0fpx 뒤로 물러남 (보장 %.0f)\n",
+               w.p.x - w.formatX, t.formatHold);
+        check(w.p.x - w.formatX >= t.formatHold - (float)TILE,
+              "터미널은 최소 간격을 보장한다 (뒤이은 구간이 불가능해지지 않게)");
+        check(t.formatHold < VIEW_W / 2, "그 간격은 화면 안에 남는다 (얼마나 가까운지 계속 보여야 한다)");
+
+        /* ── 사망 페널티 ──
+         * ★ 예전엔 리스폰이 파동을 formatLead 만큼 **밀어줬다.** 그래서 파동이 붙으면
+         *   일부러 죽는 게 최적 플레이였다. 이제 체크포인트 당시까지만 되돌린다. */
+        float atCp = w.formatAtCheckpoint;
+        w.p.y = (float)(MAP_H * TILE + 100);
+        sim_step(&w, &t, &idle, dt);
+        check(w.deathCause == DEATH_FALL, "떨어지면 죽는다");
+        Input any = { 0 }; any.anyKey = 1;
+        for (int f = 0; f < (int)(t.deathFreeze / dt) + 4; f++) sim_step(&w, &t, &any, dt);
+        printf("  체크포인트 당시 %.0f → 되살아난 뒤 %.0f (유예 %.2fs)\n",
+               atCp, w.formatX, w.formatGrace);
+        check(w.formatX <= atCp + 1.0f, "죽어도 파동이 체크포인트보다 더 물러나지는 않는다");
+        check(w.formatGrace > 0.0f,     "대신 되살아난 직후에는 잠깐 멈춰 있다 (무한 사망 방지)");
+    }
+
+    printf("\n== 보상 스테이지는 디스크가 있어야 나갈 수 있다 ==\n");
+    {
+        const float dt = 1.0f / 60.0f;
+        Input idle = { 0 };
+        for (int i = 0; i < LEVEL_COUNT; i++) {
+            if (LEVELS[i].reward == 0) continue;
+            memset(&w, 0, sizeof(w));
+            w.unlocked = AB_ALL;
+            sim_load(&w, &t, i);
+            const Level *L = sim_level(&w);
+
+            w.formatX = -9999.0f;
+            w.p.x = (float)(L->exitCol * TILE + 2);
+            w.p.y = (float)(L->exitRow * TILE);
+            w.p.vx = w.p.vy = 0.0f;
+
+            w.hasDisk = 0;
+            sim_step(&w, &t, &idle, dt);
+            snprintf(label, sizeof(label), "%s: 디스크 없이 출구에 닿아도 안 열린다", L->id);
+            check(w.state == ST_PLAY && sim_exit_locked(&w), label);
+
+            w.hasDisk = 1;
+            sim_step(&w, &t, &idle, dt);
+            snprintf(label, sizeof(label), "%s: 디스크를 챙기면 열린다", L->id);
+            check(w.state == ST_WON, label);
+        }
+        /* 보상이 없는 스테이지는 잠기면 안 된다 — 디스크는 순수 선택이어야 한다 */
+        memset(&w, 0, sizeof(w));
+        w.unlocked = AB_ALL;
+        sim_load(&w, &t, 14);                      /* s15 — 굴뚝 위 선택 회수물 */
+        check(!sim_exit_locked(&w), "s15: 선택 회수물은 출구를 안 잠근다");
+    }
+
+    /* ── 앞 스테이지로 되돌아갔을 때 ────────────────────────────────
+     *
+     * ★ 15까지 깨고 01 로 돌아가면 dash 는 **아직 주운 적이 없는 파일**이다.
+     *   전역 해금만 보고 목록에 띄우면 튜토리얼이 무너진다 (2026-08-15 변경). */
+    printf("\n== 되돌아간 스테이지의 목록 ==\n");
+    {
+        memset(&w, 0, sizeof(w));
+        sim_load(&w, &t, 0);
+        w.unlocked = AB_ALL;              /* 끝까지 깬 세이브 */
+
+        sim_load(&w, &t, 0);              /* 01 로 되돌아간다 */
+        int n = 0;
+        for (int a = 0; a < AB_COUNT; a++) if (sim_ability_unlocked(&w, a)) n++;
+        printf("  끝까지 깬 세이브로 01 에 들어갔을 때 목록 %d개 (기대 1)\n", n);
+        check(n == 1,                            "01 에서는 목록이 boot 하나뿐이다");
+        check(sim_ability_unlocked(&w, AB_BOOT), "01 에서 boot 는 뜬다");
+        check(!sim_ability_unlocked(&w, AB_DASH),"01 에서 dash 는 안 뜬다");
+
+        w.p.has[AB_DASH] = 1;             /* 들고 온 로드아웃도 남으면 안 된다 */
+        sim_load(&w, &t, 0);
+        check(!w.p.has[AB_DASH], "되돌아가면 나중 유틸리티는 장착이 풀린다");
+
+        sim_load(&w, &t, 5);              /* 06 — dash·glide·grip 은 이미 나온 뒤 */
+        n = 0;
+        for (int a = 0; a < AB_COUNT; a++) if (sim_ability_unlocked(&w, a)) n++;
+        printf("  같은 세이브로 06 에 들어갔을 때 목록 %d개 (기대 4: boot dash glide grip)\n", n);
+        check(sim_ability_unlocked(&w, AB_DASH),  "06 에서는 dash 가 뜬다");
+        check(sim_ability_unlocked(&w, AB_GRIP),  "06 에서는 grip 이 뜬다");
+        check(!sim_ability_unlocked(&w, AB_JUMP2),"06 에서 jump2 는 아직 안 뜬다");
+
+        /* 해금 자체는 안 깎인다 — 세이브가 줄어들면 진행이 사라진다 */
+        check(w.unlocked == AB_ALL, "되돌아가도 영구 해금은 그대로다");
     }
 
     printf("\n%s  (%d 실패)\n\n", failures ? "== 실패 ==" : "== 전부 통과 ==", failures);

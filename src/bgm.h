@@ -14,4 +14,9 @@ void bgm_toggle(void);
 int  bgm_enabled(void);
 void bgm_shutdown(void);
 
+/* 마스터 볼륨 (0~1). 1.0 이 원래 믹스 크기다.
+ * bgm_init 전에 불러도 값은 기억했다가 초기화 때 적용한다. */
+void  bgm_set_volume(float v);
+float bgm_volume(void);
+
 #endif

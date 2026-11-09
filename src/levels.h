@@ -5,6 +5,7 @@
 #ifndef LEVELS_H
 #define LEVELS_H
 
+
 typedef struct { short x, y, w, h; unsigned char t; } Box;
 
 /* avail: 이 터미널에서 장착 가능한 능력 비트마스크. 0 이면 전부 가능.
@@ -31,13 +32,37 @@ typedef struct { short x, y; unsigned short avail; } TermSpec;
  *
  *     그래서 teaches 가 붙은 힌트는 그 능력을 **막 얻은 스테이지에서만** 뜬다.
  *     어느 스테이지인지는 LEVELS 의 reward 에서 자동으로 나온다 —
- *     능력을 준 스테이지의 바로 다음이다. 손으로 적지 않는다. */
+ *     능력을 준 스테이지의 바로 다음이다. 손으로 적지 않는다.
+ *
+ * ★★ teaches 가 0 인 힌트에도 규칙이 있다 (2026-08-19).
+ *
+ *   위 규칙은 teaches 가 붙은 힌트만 걸렀다. 그런데 힌트 118줄 중 teaches 는
+ *   20줄뿐이었고, **나머지 98줄이 무조건 상시 표시**였다 — 스테이지당 5개.
+ *   그 98개 안에 "NOW DROP RIGHT" "THEN DOWN" "AGAIN" 같은 **행동 지시**가
+ *   26개 있었다. 태그가 안 붙어 있었다는 이유만으로 필터를 통과한 것이고,
+ *   성질은 위에서 지우기로 한 것과 똑같다. 규칙이 한 층만 덮고 있었다.
+ *
+ *   그래서 teaches 가 0 인 힌트는 **아래 셋 중 하나여야 한다.** 아니면 안 넣는다.
+ *
+ *     1. 디스크 파일명 — 스테이지당 하나. 회수 대상이 뭔지, 그리고 서사
+ *     2. 기믹 첫 등장 — 그 타일이 처음 나오는 스테이지에서 한 번만
+ *          교대 가시 s03 · 상승 기류 s04 · 무너지는 발판 s07 · 원웨이 s09
+ *          (점프패드·가시는 s01 튜토리얼에서)
+ *     3. s01 튜토리얼 — 조작·파동·터미널. 여기만 예외적으로 많다
+ *
+ *   금지: 방향 지시("DROP RIGHT"), 답 적어두기("grip.exe OR boot.exe"),
+ *         이름표 반복(DRIVE SLOT 을 19판에 다 붙이는 것), 전(轉) 예고.
+ *
+ *   118줄 -> 54줄. 화면에 뜨는 건 스테이지당 5.0개 -> 약 1.8개.
+ */
 typedef struct {
     short x, y;
     const char *keys;
-    const char *l1, *l2;
+    const char *l1, *l2;   /* l1 = 굵은 줄(무엇) · l2 = 설명(어떻게). l2 는 없어도 된다 */
     unsigned teaches;
 } HintSpec;
+
+/* 힌트 한 줄을 지금 언어로 고른다. 없으면 0 이 그대로 나온다. */
 
 /* 그 능력을 처음 쓰는 스테이지 인덱스. 없으면 -1.
  * boot 는 처음부터 갖고 있으므로 0 (s01). */
@@ -47,7 +72,13 @@ typedef struct {
     const char *id;          /* "s00" */
     const char *sector;      /* 화면에 뜨는 섹터 표기 */
     const char *file;        /* 회수 대상 파일명 */
-    const char *meta;        /* 그 파일의 한 줄 메타 — 이 게임의 감정이 여기 있다 */
+    /* 그 파일의 한 줄 설명 — **이 게임의 감정이 여기 있다.**
+     *
+     * ★ **번역하지 않는다.** 파일명과 같은 층이다 — 이 화면은 기계의 출력이고
+     *   그 파일에 원래 그렇게 적혀 있던 말이다. `AUTOEXEC.BAT` 을 안 옮기면서
+     *   `the file this machine read first` 만 옮기면 둘이 따로 논다.
+     *   (2026-08-19 결정. 한때 한국어를 나란히 뒀다가 되돌렸다) */
+    const char *meta;
     long        fileBytes;
 
     const Box      *boxes;  int boxCount;

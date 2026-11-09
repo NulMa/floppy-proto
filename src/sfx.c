@@ -39,6 +39,7 @@ static const SfxSpec SPEC[SFX_COUNT] = {
 
 static Sound g_snd[SFX_COUNT];
 static int   g_ready = 0;
+static float g_vol   = 1.0f;   /* 마스터 볼륨. SPEC 의 vol 위에 곱해진다 */
 
 static unsigned g_rng = 0x13579BDFu;
 static float noise(void)
@@ -98,7 +99,19 @@ void sfx_init(void)
     if (!IsAudioDeviceReady()) return;    /* 사운드 장치가 없어도 게임은 돌아야 한다 */
     for (int i = 0; i < SFX_COUNT; i++) g_snd[i] = synth(&SPEC[i]);
     g_ready = 1;
+    sfx_set_volume(g_vol);    /* init 전에 세이브에서 읽은 값이 있으면 여기서 반영된다 */
 }
+
+void sfx_set_volume(float v)
+{
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    g_vol = v;
+    if (!g_ready) return;     /* 값만 남긴다 — sfx_init 이 적용한다 */
+    for (int i = 0; i < SFX_COUNT; i++) SetSoundVolume(g_snd[i], g_vol);
+}
+
+float sfx_volume(void) { return g_vol; }
 
 void sfx_play(SfxId id)
 {

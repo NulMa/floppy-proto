@@ -54,10 +54,14 @@ static const unsigned char PERC[2][STEPS] = {
     { 1, 0, 2, 0,  1, 0, 2, 0,   1, 0, 2, 0,  1, 0, 2, 2 },   /* B */
 };
 
+/* 믹스 기준 크기. 마스터 볼륨 1.0 = 이 값 그대로 */
+#define BGM_BASE 0.55f
+
 /* ── 상태 ───────────────────────────────────────────────────────── */
 static AudioStream g_stream;
 static short g_buf[BUFN];
 static int   g_ready = 0, g_on = 1;
+static float g_vol   = 1.0f;
 
 static int   g_pat = 0, g_step = 0, g_stepPos = 0;
 static float g_leadPh, g_bassPh;
@@ -150,7 +154,7 @@ void bgm_init(void)
 
     SetAudioStreamBufferSizeDefault(BUFN);
     g_stream = LoadAudioStream(SR, 16, 1);
-    SetAudioStreamVolume(g_stream, 0.55f);
+    SetAudioStreamVolume(g_stream, BGM_BASE * g_vol);
 
     g_leadF = note_hz(69);
     g_bassF = note_hz(45);
@@ -172,6 +176,16 @@ void bgm_update(void)
 
 void bgm_toggle(void) { g_on = !g_on; }
 int  bgm_enabled(void) { return g_ready && g_on; }
+
+void bgm_set_volume(float v)
+{
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    g_vol = v;
+    if (g_ready) SetAudioStreamVolume(g_stream, BGM_BASE * g_vol);
+}
+
+float bgm_volume(void) { return g_vol; }
 
 void bgm_shutdown(void)
 {

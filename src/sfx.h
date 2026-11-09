@@ -33,4 +33,9 @@ void sfx_init(void);
 void sfx_play(SfxId id);
 void sfx_shutdown(void);
 
+/* 마스터 볼륨 (0~1). 1.0 이 위 SPEC 표에 적힌 그대로의 크기다.
+ * sfx_init 전에 불러도 값은 기억했다가 초기화 때 적용한다. */
+void  sfx_set_volume(float v);
+float sfx_volume(void);
+
 #endif
